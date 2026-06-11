@@ -177,14 +177,27 @@ document.addEventListener('click', e => {
 
       <div class="checkout-box">
         <h3>Phương thức thanh toán</h3>
-        <div class="pay-option selected" onclick="selectPayment(this)">
-          <input type="radio" name="pay" checked> 🏦 Chuyển khoản ngân hàng
+        <div class="pay-option selected" data-method="VNPay" onclick="selectPayment(this)"
+             style="border-color:#0F6E56;background:rgba(15,110,86,.04)">
+          <input type="radio" name="pay" value="VNPay" checked>
+          <div style="display:flex;align-items:center;gap:10px;flex:1">
+            <span style="font-size:22px">💳</span>
+            <div>
+              <div style="font-weight:700;font-size:14px">VNPay</div>
+              <div style="font-size:12px;color:var(--text-muted)">ATM · Visa · Mastercard · QR Code</div>
+            </div>
+            <span style="background:#0F6E56;color:#E1FCF6;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:auto;white-space:nowrap">Khuyến nghị</span>
+          </div>
         </div>
-        <div class="pay-option" onclick="selectPayment(this)">
-          <input type="radio" name="pay"> 📱 MoMo / ZaloPay
-        </div>
-        <div class="pay-option" onclick="selectPayment(this)">
-          <input type="radio" name="pay"> 💳 Thẻ Visa / Mastercard
+        <div class="pay-option" data-method="Chuyển khoản ngân hàng" onclick="selectPayment(this)">
+          <input type="radio" name="pay" value="Chuyen khoan">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:22px">🏦</span>
+            <div>
+              <div style="font-weight:700;font-size:14px">Chuyển khoản ngân hàng</div>
+              <div style="font-size:12px;color:var(--text-muted)">Quét mã QR sau khi đặt hàng</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -206,7 +219,7 @@ document.addEventListener('click', e => {
         <button class="btn-apply" onclick="applyCoupon()">Áp dụng</button>
       </div>
 
-      <button class="btn-checkout" onclick="showQR()">Đặt hàng ngay →</button>
+      <button class="btn-checkout" id="checkoutBtn" onclick="handleCheckout()">Đặt hàng ngay →</button>
 
       <p style="text-align:center;margin-top:12px;font-size:13px">
         <a href="products.php" style="color:var(--teal-700)">← Tiếp tục mua sắm</a>
@@ -237,7 +250,11 @@ document.addEventListener('click', e => {
 <script src="shared.js"></script>
 <script>
   function selectPayment(el) {
-    document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
+    document.querySelectorAll('.pay-option').forEach(o => {
+      o.classList.remove('selected');
+      o.style.borderColor = '';
+      o.style.background  = '';
+    });
     el.classList.add('selected');
     el.querySelector('input[type=radio]').checked = true;
   }
@@ -340,90 +357,62 @@ function syncCheckoutPage() {
   });
 </script>
 
-<!-- ══ QR PAYMENT MODAL ══ -->
-<div id="qrModal" style="
-    display:none; position:fixed; inset:0; z-index:500;
-    background:rgba(0,0,0,.65); backdrop-filter:blur(6px);
-    align-items:center; justify-content:center; padding:20px;">
-  <div style="
-      background:var(--card-bg); border-radius:20px;
-      padding:32px; width:min(380px,100%);
-      text-align:center; position:relative;
-      box-shadow:0 24px 80px rgba(0,0,0,.35);
-      border:1px solid var(--border);
-      animation:qrFadeIn .3s cubic-bezier(.22,1,.36,1);">
-
-    <!-- Close -->
-    <button onclick="closeQR()" style="
-        position:absolute; top:14px; right:14px;
-        width:30px; height:30px; border:none;
-        background:var(--bg-alt); border-radius:8px;
-        cursor:pointer; font-size:16px; color:var(--text-muted);
-        display:flex; align-items:center; justify-content:center;">✕</button>
-
-    <!-- Header -->
-    <div style="font-size:28px; margin-bottom:6px">💳</div>
-    <h3 style="font-size:18px; font-weight:800; margin-bottom:4px; color:var(--text)">Quét mã để thanh toán</h3>
-    <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px">
-      Sử dụng MoMo, ZaloPay, VietQR hoặc Internet Banking
-    </p>
-
-    <!-- QR Image -->
-    <div style="
-        background:#fff; border-radius:14px;
-        padding:16px; display:inline-block;
-        box-shadow:0 4px 20px rgba(0,0,0,.1);
-        margin-bottom:18px;">
-      <img src="qr-payment.jpg" alt="QR Payment"
-           style="width:220px; height:220px; object-fit:contain; display:block;">
-    </div>
-
-    <!-- Amount -->
-    <div id="qrAmount" style="
-        font-size:22px; font-weight:800;
-        color:var(--teal-700); margin-bottom:6px;
-        font-family:var(--font-display,'Syne',sans-serif)"></div>
-    <p style="font-size:12px; color:var(--text-muted); margin-bottom:20px">
-      ⚡ Sau khi chuyển khoản, nhấn xác nhận bên dưới
-    </p>
-
-    <!-- Confirm button -->
-    <button onclick="confirmPayment()" style="
-        width:100%; padding:13px;
-        background:linear-gradient(135deg,var(--teal-700,#0B4220),var(--teal-900,#041409));
-        color:#fff; border:none; border-radius:10px;
-        font-size:15px; font-weight:700; cursor:pointer;
-        font-family:inherit; transition:transform .2s, box-shadow .2s;
-        margin-bottom:10px;"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(11,66,32,.4)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
-      ✅ Đã chuyển khoản xong
-    </button>
-    <button onclick="closeQR()" style="
-        width:100%; padding:11px;
-        background:none; border:1.5px solid var(--border);
-        border-radius:10px; font-size:13px; font-weight:600;
-        cursor:pointer; color:var(--text-muted); font-family:inherit;">
-      Quay lại
-    </button>
+<!-- ══ VNPAY CHECKOUT SCRIPT ══ -->
+<div id="loadingModal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);align-items:center;justify-content:center">
+  <div style="background:var(--card-bg,#fff);border-radius:20px;padding:40px 32px;text-align:center;min-width:280px;box-shadow:0 24px 80px rgba(0,0,0,.3)">
+    <div style="font-size:48px;margin-bottom:14px">🔄</div>
+    <div style="font-size:16px;font-weight:700;color:var(--text,#1A1A18);margin-bottom:8px">Đang chuyển đến VNPay...</div>
+    <div style="font-size:13px;color:var(--text-muted,#6B7F6E)">Vui lòng không đóng trang này</div>
+    <div style="margin-top:20px;width:40px;height:40px;border:3px solid rgba(15,110,86,.2);border-top-color:#0F6E56;border-radius:50%;animation:spin .8s linear infinite;margin:20px auto 0"></div>
   </div>
 </div>
-
 <style>
-@keyframes qrFadeIn {
-  from { transform:scale(.9) translateY(20px); opacity:0 }
-  to   { transform:scale(1)  translateY(0);    opacity:1 }
-}
+@keyframes spin { to { transform:rotate(360deg) } }
 </style>
 
+<!-- QR Modal (cho phương thức chuyển khoản) -->
+<div id="qrModal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card-bg);border-radius:20px;padding:32px;width:min(380px,100%);text-align:center;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.35);border:1px solid var(--border);animation:qrFadeIn .3s cubic-bezier(.22,1,.36,1)">
+    <button onclick="closeQR()" style="position:absolute;top:14px;right:14px;width:30px;height:30px;border:none;background:var(--bg-alt);border-radius:8px;cursor:pointer;font-size:16px;color:var(--text-muted);display:flex;align-items:center;justify-content:center">✕</button>
+    <div style="font-size:28px;margin-bottom:6px">💳</div>
+    <h3 style="font-size:18px;font-weight:800;margin-bottom:4px;color:var(--text)">Quét mã để thanh toán</h3>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Sử dụng MoMo, ZaloPay, VietQR hoặc Internet Banking</p>
+    <div style="background:#fff;border-radius:14px;padding:16px;display:inline-block;box-shadow:0 4px 20px rgba(0,0,0,.1);margin-bottom:18px">
+      <img src="qr-payment.jpg" alt="QR Payment" style="width:220px;height:220px;object-fit:contain;display:block">
+    </div>
+    <div id="qrAmount" style="font-size:22px;font-weight:800;color:#0F6E56;margin-bottom:6px"></div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px">⚡ Sau khi chuyển khoản, nhấn xác nhận bên dưới</p>
+    <button onclick="confirmPayment()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0F6E56,#1D9E75);color:#E1FCF6;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px">
+      ✅ Đã chuyển khoản xong
+    </button>
+    <button onclick="closeQR()" style="width:100%;padding:11px;background:none;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-muted);font-family:inherit">Quay lại</button>
+  </div>
+</div>
+<style>
+@keyframes qrFadeIn { from{transform:scale(.9) translateY(20px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
+</style>
 
 <script>
 const PLACE_ORDER_URL = 'api/place-order.php';
+const VNPAY_URL       = 'vnpay-payment.php';
 
-function getSelectedPaymentLabel() {
+function getSelectedPaymentMethod() {
   const sel = document.querySelector('.pay-option.selected');
-  if (!sel) return 'Chuyển khoản ngân hàng';
-  return sel.textContent.trim();
+  return sel?.dataset.method || 'VNPay';
+}
+
+function selectPayment(el) {
+  document.querySelectorAll('.pay-option').forEach(o => {
+    o.classList.remove('selected');
+    o.style.borderColor = '';
+    o.style.background  = '';
+  });
+  el.classList.add('selected');
+  el.querySelector('input[type=radio]').checked = true;
+  if (el.dataset.method === 'VNPay') {
+    el.style.borderColor = '#0F6E56';
+    el.style.background  = 'rgba(15,110,86,.04)';
+  }
 }
 
 function getCheckoutPayload() {
@@ -431,30 +420,67 @@ function getCheckoutPayload() {
     ? document.getElementById('couponInput').value.trim().toUpperCase()
     : null;
   return {
-    items: getCart().map(i => ({ id: i.id, qty: i.qty, price: i.price })),
-    phuong_thuc_tt: getSelectedPaymentLabel(),
-    ma_giam_gia: code && COUPONS[code] ? code : null
+    items:         getCart().map(i => ({ id: i.id, qty: i.qty, price: i.price })),
+    phuong_thuc_tt: getSelectedPaymentMethod(),
+    ma_giam_gia:   code && COUPONS[code] ? code : null,
+    ho_ten:        document.getElementById('ckName').value.trim(),
+    email:         document.getElementById('ckEmail').value.trim(),
+    phone:         document.getElementById('ckPhone').value.trim(),
   };
 }
 
-function showQR() {
-  const items = getCart();
-  if (items.length === 0) {
-    showToast('⚠ Giỏ hàng đang trống!');
-    return;
-  }
-
+async function handleCheckout() {
+  const cart = getCart();
+  if (cart.length === 0) { showToast('⚠ Giỏ hàng đang trống!'); return; }
   const err = validateCheckoutForm();
-  if (err) {
-    showToast('⚠ ' + err);
-    document.getElementById('ckEmail')?.reportValidity();
-    document.getElementById('ckPhone')?.reportValidity();
-    return;
-  }
+  if (err) { showToast('⚠ ' + err); return; }
 
+  const method = getSelectedPaymentMethod();
+
+  if (method === 'VNPay') {
+    await handleVNPay();
+  } else {
+    showQR();
+  }
+}
+
+async function handleVNPay() {
+  const btn = document.getElementById('checkoutBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang xử lý...';
+  document.getElementById('loadingModal').style.display = 'flex';
+
+  try {
+    const res  = await fetch(VNPAY_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body:    JSON.stringify(getCheckoutPayload()),
+    });
+    const data = await res.json();
+
+    if (data.ok && data.pay_url) {
+      localStorage.removeItem('fsw-cart');
+      window.location.href = data.pay_url;  // Chuyển đến cổng VNPay
+    } else {
+      document.getElementById('loadingModal').style.display = 'none';
+      showToast('⚠ ' + (data.error || 'Không tạo được link thanh toán'));
+      btn.disabled = false;
+      btn.textContent = 'Đặt hàng ngay →';
+    }
+  } catch(e) {
+    document.getElementById('loadingModal').style.display = 'none';
+    showToast('⚠ Lỗi kết nối. Vui lòng thử lại.');
+    btn.disabled = false;
+    btn.textContent = 'Đặt hàng ngay →';
+    console.error(e);
+  }
+}
+
+// ── QR fallback (chuyển khoản ngân hàng) ──
+function showQR() {
   const finalTotal = getFinalTotal();
   document.getElementById('qrAmount').textContent = finalTotal.toLocaleString('vi-VN') + 'đ';
-
   document.getElementById('qrModal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
@@ -465,65 +491,33 @@ function closeQR() {
 
 async function confirmPayment() {
   const cart = getCart();
-  if (cart.length === 0) {
-    showToast('⚠ Giỏ hàng đang trống!');
-    return;
-  }
+  if (cart.length === 0) { showToast('⚠ Giỏ hàng trống!'); return; }
   const err = validateCheckoutForm();
-  if (err) {
-    showToast('⚠ ' + err);
-    document.getElementById('ckEmail')?.reportValidity();
-    document.getElementById('ckPhone')?.reportValidity();
-    return;
-  }
+  if (err) { showToast('⚠ ' + err); return; }
+
   const btn = document.querySelector('#qrModal button[onclick="confirmPayment()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu đơn...'; }
   try {
-    const res = await fetch(PLACE_ORDER_URL, {
+    const res  = await fetch(PLACE_ORDER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify(getCheckoutPayload())
+      body: JSON.stringify(getCheckoutPayload()),
     });
     const data = await res.json();
-
-    if (res.status === 401) {
-      showToast('⚠ Vui lòng đăng nhập để lưu đơn hàng');
-      setTimeout(() => {
-        window.location.href = 'login.php?redirect=' + encodeURIComponent('checkout.php');
-      }, 1500);
-      return;
-    }
-
-    if (!data.ok) {
-      showToast('⚠ ' + (data.error || 'Không lưu được đơn hàng'));
-      return;
-    }
-
+    if (!data.ok) { showToast('⚠ ' + (data.error || 'Lỗi lưu đơn')); return; }
     localStorage.removeItem('fsw-cart');
     closeQR();
     showToast('🎉 Đặt hàng thành công! Mã đơn #' + data.order_id);
-    setTimeout(() => {
-      window.location.href = 'profile.php?tab=orders';
-    }, 1500);
-
-  } catch (err) {
-    showToast('⚠ Lỗi kết nối server');
-    console.error(err);
+    setTimeout(() => { window.location.href = 'profile.php?tab=orders'; }, 1600);
+  } catch(e) {
+    showToast('⚠ Lỗi kết nối');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Đã chuyển khoản xong'; }
   }
 }
 
-document.getElementById('qrModal').addEventListener('click', function(e) {
-  if (e.target === this) closeQR();
-});
-
-// Đóng modal khi click nền
-document.getElementById('qrModal').addEventListener('click', function(e) {
-    if (e.target === this) closeQR();
-});
+document.getElementById('qrModal').addEventListener('click', e => { if(e.target===document.getElementById('qrModal')) closeQR(); });
 </script>
-
 </body>
 </html>

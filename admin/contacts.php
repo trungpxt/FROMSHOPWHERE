@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../mail-config.php';
 requireAdmin();
 
 /* Tạo bảng nếu chưa có */
@@ -37,17 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $row   = db()->query("SELECT * FROM contact_messages WHERE id=$id")->fetch();
         if ($row && $reply) {
             try {
-                require_once __DIR__ . '/../vendor/autoload.php';
-                $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-                $mail->isSMTP();
-                $mail->Host       = MAIL_HOST;
-                $mail->SMTPAuth   = true;
-                $mail->Username   = MAIL_FROM;
-                $mail->Password   = MAIL_PASSWORD;
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = MAIL_PORT;
-                $mail->CharSet    = 'UTF-8';
-                $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
+                $mail = createMailer();
                 $mail->addAddress($row['email'], $row['ho_ten']);
                 $mail->Subject = "Re: " . $row['chu_de'] . " — FROMSHOPWHERE";
                 $mail->isHTML(true);

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../mail-config.php';
 requireAdmin();
 
 /* ── Hàm gửi email hoàn thành đơn hàng ── */
@@ -27,17 +28,7 @@ function sendOrderCompletedEmail(int $orderId): bool {
         $items = $items->fetchAll();
         if (empty($items)) return false;
 
-        require_once __DIR__ . '/../vendor/autoload.php';
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        $mail->isSMTP();
-        $mail->Host       = MAIL_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = MAIL_FROM;
-        $mail->Password   = MAIL_PASSWORD;
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = MAIL_PORT;
-        $mail->CharSet    = 'UTF-8';
-        $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
+        $mail = createMailer();
         $mail->addAddress($order['email'], $order['ho_ten']);
         $mail->Subject = "🎉 Đơn hàng #$orderId đã hoàn thành — License key của bạn";
         $mail->isHTML(true);

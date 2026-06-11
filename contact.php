@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/mail-config.php';
 startSession();
 $currentPage = 'contact';
 $_user = currentUser();
@@ -61,17 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* Gửi email xác nhận cho người gửi */
         $sent = false;
         try {
-            require_once __DIR__ . '/vendor/autoload.php';
-            $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-            $mail->isSMTP();
-            $mail->Host       = MAIL_HOST;
-            $mail->SMTPAuth   = true;
-            $mail->Username   = MAIL_FROM;
-            $mail->Password   = MAIL_PASSWORD;
-            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = MAIL_PORT;
-            $mail->CharSet    = 'UTF-8';
-            $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
+            $mail = createMailer();
             $mail->addAddress($email, $ho_ten);
             $mail->Subject = "[FROMSHOPWHERE] Đã nhận tin nhắn của bạn — #$msgId";
             $mail->isHTML(true);
@@ -98,16 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         /* Gửi thông báo cho admin */
         try {
-            $mail2 = new PHPMailer\PHPMailer\PHPMailer(true);
-            $mail2->isSMTP();
-            $mail2->Host       = MAIL_HOST;
-            $mail2->SMTPAuth   = true;
-            $mail2->Username   = MAIL_FROM;
-            $mail2->Password   = MAIL_PASSWORD;
-            $mail2->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            $mail2->Port       = MAIL_PORT;
-            $mail2->CharSet    = 'UTF-8';
-            $mail2->setFrom(MAIL_FROM, MAIL_FROM_NAME);
+            $mail2 = createMailer();
             $mail2->addAddress(MAIL_FROM, 'Admin FSW');
             $mail2->Subject = "📩 Liên hệ mới #$msgId — ".e($chu_de)." từ ".e($ho_ten);
             $mail2->isHTML(true);
