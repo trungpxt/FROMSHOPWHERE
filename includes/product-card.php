@@ -27,7 +27,7 @@ function renderProductCard(array $p, string $variant = 'home'): void {
         </div>
         <div class="hc-tag"><?= e($p['ten_danh_muc'] ?? '') ?></div>
         <div class="prod-card-actions">
-            <a class="btn-atc" href="<?= e($detailUrl) ?>">🛒 Mua ngay</a>
+            <button class="btn-atc" onclick="addToCart(<?= (int)$p['id'] ?>,'<?= addslashes(e($p['ten_san_pham'])) ?>',<?= (float)$p['gia_ban'] ?>,'<?= addslashes($p['hinh_anh'] ?? '') ?>')">🛒 Mua ngay</button>
             <a class="btn-detail" href="<?= e($detailUrl) ?>">Chi tiết</a>
         </div>
     </article>
@@ -50,7 +50,7 @@ function renderProductCard(array $p, string $variant = 'home'): void {
             <?php endif; ?>
         </div>
         <div class="pc-btns">
-            <a class="pc-btn-cart" href="<?= e($detailUrl) ?>">🛒 Mua ngay</a>
+            <button class="pc-btn-cart" onclick="addToCart(<?= (int)$p['id'] ?>,'<?= addslashes(e($p['ten_san_pham'])) ?>',<?= (float)$p['gia_ban'] ?>,'<?= addslashes($p['hinh_anh'] ?? '') ?>')">🛒 Mua ngay</button>
             <a class="pc-btn-detail" href="<?= e($detailUrl) ?>">Chi tiết</a>
         </div>
     </article>

@@ -5,15 +5,10 @@ startSession();
 $currentPage = 'home';
 
 $cat_icons = ['Thiết kế'=>'🎨','Văn phòng'=>'📄','Video'=>'🎬','Bảo mật'=>'🔒','Lưu trữ'=>'☁️','Developer'=>'💻','Mẹo hay'=>'💡'];
-$filterCat = trim($_GET['cat'] ?? 'all');
 
 try {
     $sql = "SELECT p.*, c.ten_danh_muc FROM products p JOIN categories c ON c.id=p.danh_muc_id WHERE p.trang_thai='hien'";
     $params = [];
-    if ($filterCat !== 'all' && $filterCat !== '') {
-        $sql .= " AND c.ten_danh_muc = :cat";
-        $params[':cat'] = $filterCat;
-    }
     $sql .= " ORDER BY p.id DESC LIMIT 8";
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
@@ -33,9 +28,6 @@ function bgGrad($c) {
     return $m[$c] ?? '#022b18';
 }
 
-function indexCatUrl(string $cat): string {
-    return $cat === 'all' ? 'index.php' : 'index.php?cat=' . urlencode($cat);
-}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -108,25 +100,97 @@ function indexCatUrl(string $cat): string {
       <a href="products.php" class="link-teal">Xem tất cả →</a>
     </div>
 
-    <div class="cats-wrap">
-      <a href="<?= e(indexCatUrl('all')) ?>" class="cat-pill<?= $filterCat === 'all' ? ' active' : '' ?>">Tất cả</a>
+    <div class="cats-wrap" id="catPills">
+      <button class="cat-pill active" data-cat="all">Tất cả</button>
       <?php foreach ($cats_db as $cname):
         $cico = $cat_icons[$cname] ?? '📦';
-        $active = ($filterCat === $cname) ? ' active' : '';
       ?>
-      <a href="<?= e(indexCatUrl($cname)) ?>" class="cat-pill<?= $active ?>"><?= $cico ?> <?= e($cname) ?></a>
+      <button class="cat-pill" data-cat="<?= e($cname) ?>"><?= $cico ?> <?= e($cname) ?></button>
       <?php endforeach; ?>
     </div>
 
-    <div class="prod-grid">
-    <?php if (empty($products)): ?>
-      <p class="empty-grid-msg">Chưa có sản phẩm<?= $filterCat !== 'all' ? ' trong danh mục này' : '' ?>.</p>
-    <?php else: ?>
+    <div class="prod-grid" id="homeProductGrid">
       <?php foreach ($products as $p) renderProductCard($p, 'home'); ?>
-    <?php endif; ?>
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+  const grid  = document.getElementById('homeProductGrid');
+  const pills = document.getElementById('catPills');
+  const CAT_ICONS = <?= json_encode(array_combine($cats_db, array_map(fn($c) => ($cat_icons[$c] ?? '📦') . ' ' . $c, $cats_db)), JSON_UNESCAPED_UNICODE) ?>;
+
+  function setLoading(on) {
+    grid.style.opacity  = on ? '0.45' : '1';
+    grid.style.pointerEvents = on ? 'none' : '';
+    if (on) grid.style.transition = 'opacity .15s';
+  }
+
+  function buildCard(p) {
+    const giaBan  = parseFloat(p.gia_ban)  || 0;
+    const giaGoc  = parseFloat(p.gia_goc)  || 0;
+    const disc    = (giaGoc > giaBan && giaGoc > 0) ? Math.round((1 - giaBan / giaGoc) * 100) : 0;
+    const img     = p.hinh_anh || '';
+    const imgSrc  = img ? `images/${img}` : `images/default.jpg`;
+    const name    = p.ten_san_pham || '';
+    const nameSafe = name.replace(/'/g, "\\'");
+    const imgSafe  = img.replace(/'/g, "\\'");
+    const cat     = p.ten_danh_muc || '';
+    const detailUrl = `product-demo.php?id=${p.id}`;
+
+    const discBadge = disc > 0 ? `<span class="pc-discount">-${disc}%</span>` : '';
+    const newBadge  = parseInt(p.la_moi) ? `<span class="pc-badge-new">MỚI</span>` : '';
+    const oldPrice  = (giaGoc > giaBan) ? `<span class="pc-price-old">${fmt(giaGoc)}</span>` : '';
+
+    return `<article class="prod-card">
+      <a class="pc-thumb" href="${detailUrl}">
+        <img src="${imgSrc}" alt="${name.replace(/"/g,'&quot;')}" loading="lazy" onerror="this.src='images/default.jpg'">
+      </a>
+      <div class="pc-badges">
+        <span class="pc-badge-cat">${cat}</span>${newBadge}${discBadge}
+      </div>
+      <a class="pc-name" href="${detailUrl}">${name}</a>
+      <div class="pc-price-row">
+        <span class="pc-price">${fmt(giaBan)}</span>${oldPrice}
+      </div>
+      <div class="pc-btns">
+        <button class="pc-btn-cart" onclick="addToCart(${p.id},'${nameSafe}',${giaBan},'${imgSafe}')">🛒 Mua ngay</button>
+        <a class="pc-btn-detail" href="${detailUrl}">Chi tiết</a>
+      </div>
+    </article>`;
+  }
+
+  function loadCat(cat) {
+    setLoading(true);
+    const url = cat === 'all'
+      ? 'api/products.php?limit=8'
+      : `api/products.php?ten=${encodeURIComponent(cat)}&limit=8`;
+
+    fetch(url)
+      .then(r => r.json())
+      .then(res => {
+        const items = res.data || [];
+        if (items.length === 0) {
+          grid.innerHTML = `<p class="empty-grid-msg">Chưa có sản phẩm${cat !== 'all' ? ' trong danh mục này' : ''}.</p>`;
+        } else {
+          grid.innerHTML = items.map(buildCard).join('');
+        }
+        setLoading(false);
+        grid.style.transition = 'opacity .2s';
+      })
+      .catch(() => { setLoading(false); });
+  }
+
+  pills.addEventListener('click', function(e) {
+    const btn = e.target.closest('.cat-pill');
+    if (!btn) return;
+    pills.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadCat(btn.dataset.cat);
+  });
+})();
+</script>
 
 <div class="steps-wrap">
   <div class="hw-section section-flush">

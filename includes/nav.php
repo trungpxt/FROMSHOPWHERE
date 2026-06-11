@@ -86,3 +86,10 @@ $_navPage    = $currentPage ?? '';
 </nav>
 
 <script src="shared.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  restoreTheme();
+  updateCartBadge();
+  syncCartPanel();
+});
+</script>
