@@ -20,9 +20,10 @@ try {
         $params[':cat'] = $filterCat;
     }
     if ($searchQ !== '') {
-        $sql .= " AND (p.ten_san_pham LIKE :q OR c.ten_danh_muc LIKE :q)";
-        $params[':q'] = '%' . $searchQ . '%';
-    }
+      $sql .= " AND (p.ten_san_pham LIKE :q1 OR c.ten_danh_muc LIKE :q2)";
+      $params[':q1'] = '%' . $searchQ . '%';
+      $params[':q2'] = '%' . $searchQ . '%';
+  }
 
     $orderMap = [
         'asc'  => 'p.gia_ban ASC',
