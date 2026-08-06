@@ -1,4 +1,5 @@
 <?php
+if (!defined('SITE_URL')) { header('HTTP/1.0 403 Forbidden'); exit; }
 // sidebar.php — dùng chung cho tất cả trang admin
 $cur = basename($_SERVER['PHP_SELF']);
 if (!function_exists('navActive')) {
@@ -9,12 +10,16 @@ if (!function_exists('navActive')) {
 ?>
 <aside class="adm-side">
   <div class="adm-logo">
-    <img src="<?= SITE_URL ?>/images/logo.png" alt="FSW" style="height:34px">
+    <img src="<?= SITE_URL ?>/images/ui/logo.png" alt="FSW" class="logo-img-light" style="height:34px">
+    <img src="<?= SITE_URL ?>/images/ui/logo-dark.png" alt="FSW" class="logo-img-dark" style="height:34px">
   </div>
   <nav class="adm-nav">
     <div class="adm-nav-label">Quản lý</div>
     <a href="<?= SITE_URL ?>/admin/" class="<?= $cur==='index.php'?'on':'' ?>">
       <span class="nav-icon">📊</span> Dashboard
+    </a>
+    <a href="<?= SITE_URL ?>/admin/statistics.php" class="<?= navActive('statistics',$cur) ?>">
+      <span class="nav-icon">📈</span> Thống kê
     </a>
     <a href="<?= SITE_URL ?>/admin/products.php" class="<?= navActive('products',$cur) ?>">
       <span class="nav-icon">📦</span> Sản phẩm
@@ -40,17 +45,26 @@ if (!function_exists('navActive')) {
       } catch(Exception $e) {}
       ?>
     </a>
+    <a href="<?= SITE_URL ?>/admin/coupons.php" class="<?= navActive('coupons',$cur) ?>">
+      <span class="nav-icon">🎁</span> Mã giảm giá
+    </a>
+    <a href="<?= SITE_URL ?>/admin/chatbot-faq.php" class="<?= navActive('chatbot-faq',$cur) ?>">
+      <span class="nav-icon">🤖</span> FAQ Chatbot
+    </a>
+    <a href="<?= SITE_URL ?>/admin/chatbot-log.php" class="<?= navActive('chatbot-log',$cur) ?>">
+      <span class="nav-icon">❓</span> Chất lượng Chatbot
+    </a>
     <div class="adm-sep"></div>
-    <div class="adm-nav-label">Liên kết</div>
-    <a href="<?= SITE_URL ?>/blog.php" target="_blank">
-      <span class="nav-icon">📰</span> Xem Blog
-    </a>
-    <a href="<?= SITE_URL ?>/index.php" target="_blank">
-      <span class="nav-icon">🌐</span> Xem website
-    </a>
-    <a href="<?= SITE_URL ?>/logout.php">
-      <span class="nav-icon">🚪</span> Đăng xuất
-    </a>
+    <div class="adm-nav-group" id="admLinkGroup">
+      <button type="button" class="adm-nav-toggle" onclick="document.getElementById('admLinkGroup').classList.toggle('open')">
+        <span class="nav-icon">🔗</span> Liên kết <span class="adm-nav-caret">▾</span>
+      </button>
+      <div class="adm-nav-sub">
+        <a href="<?= SITE_URL ?>/blog.php"><span class="nav-icon">📰</span> Xem Blog</a>
+        <a href="<?= SITE_URL ?>/index.php"><span class="nav-icon">🌐</span> Xem website</a>
+        <a href="<?= SITE_URL ?>/logout.php"><span class="nav-icon">🚪</span> Đăng xuất</a>
+      </div>
+    </div>
   </nav>
   <div class="adm-user">
     <div class="adm-avatar"><?= strtoupper(mb_substr($_SESSION['user_name'] ?? 'A', 0, 1)) ?></div>

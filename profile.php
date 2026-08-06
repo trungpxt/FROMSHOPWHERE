@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/referral.php';
 startSession();
 if (!isLoggedIn()) redirect(SITE_URL . '/login.php?redirect=' . urlencode(SITE_URL . '/profile.php'));
 
@@ -10,6 +11,8 @@ $user = currentUser();
 $u = db()->prepare("SELECT * FROM users WHERE id=:id");
 $u->execute([':id' => $user['id']]);
 $u = $u->fetch();
+
+$refStats = referral_stats((int)$user['id']);
 
 // Lấy danh sách đơn hàng
 $ordersStmt = db()->prepare("
@@ -46,6 +49,7 @@ if (!empty($orders)) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
     $action = $_POST['action'] ?? '';
 
 if ($action === 'update_info') {
@@ -92,142 +96,26 @@ $currentPage = '';
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tài khoản — FROMSHOPWHERE</title>
-<link rel="stylesheet" href="style.css">
-<style>
-.profile-wrap{max-width:860px;margin:0 auto;padding:40px 24px}
-.profile-grid{display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:start}
-.profile-side{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:24px;text-align:center;position:sticky;top:80px}
-.profile-avatar{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--green-600),var(--green-800));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:var(--lime,#C8FF00);margin:0 auto 14px;font-family:'Space Grotesk',sans-serif}
-.profile-name{font-size:16px;font-weight:700;margin-bottom:4px}
-.profile-email{font-size:12px;color:var(--text-muted);margin-bottom:16px}
-.profile-role{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;background:var(--green-50);color:var(--green-700,#065E34)}
-.profile-tabs{display:flex;gap:2px;margin-bottom:20px;background:var(--bg-alt);border-radius:10px;padding:4px}
-.ptab{flex:1;text-align:center;padding:9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-muted);border:none;background:none;font-family:'Inter',sans-serif;transition:all .2s}
-.ptab.on{background:var(--card-bg);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.1)}
-.tab-content{display:none}.tab-content.on{display:block}
-.info-box{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px}
-.info-box h3{font-size:15px;font-weight:700;margin:0 0 18px;font-family:'Space Grotesk',sans-serif}
-.msg-ok{background:#D1FAE5;color:#065F46;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;border:1px solid #6EE7B7}
-.msg-err{background:#FEE2E2;color:#991B1B;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
-table.ord-tbl{width:100%;border-collapse:collapse;font-size:13px}
-.ord-tbl th{padding:9px 12px;background:var(--bg-alt);color:var(--text-muted);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
-.ord-tbl td{padding:10px 12px;border-bottom:1px solid var(--border)}
-.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
-.b-cho{background:#FEF3C7;color:#92400E}.b-tt{background:#D1FAE5;color:#065F46}.b-hoan{background:#DBEAFE;color:#1E40AF}.b-huy{background:#FEE2E2;color:#991B1B}
-@media(max-width:600px){.profile-grid{grid-template-columns:1fr}.profile-side{position:static}}
-</style>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
+<link rel="stylesheet" href="assets/css/profile.css">
 </head>
-<body>
-<?php
-/* ── inline nav ── */
-if (!defined('SITE_URL')) require_once __DIR__ . '/config.php';
-startSession();
-$_user        = currentUser();
-$_currentPage = $currentPage ?? '';
-?>
-<!-- ── TOAST ── -->
-<div class="toast" id="toast"></div>
+<body data-initial-tab="<?= ($msg && str_contains($msg,'mật khẩu')) ? 'pass' : 'info' ?>">
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 
-<!-- ── CART OVERLAY ── -->
-<div class="cart-overlay" id="cartOverlay" onclick="closeCartOnBackdrop(event)">
-  <div class="cart-panel">
-    <div class="cart-header">
-      <h3>Giỏ hàng</h3>
-      <button class="close-btn" onclick="toggleCart()">✕</button>
-    </div>
-    <div class="cart-items" id="cartItems">
-      <div style="text-align:center;padding:48px 0">
-        <div style="font-size:40px;margin-bottom:12px">🛒</div>
-        <p style="color:var(--text-muted);font-size:14px">Giỏ hàng trống</p>
-      </div>
-    </div>
-    <div class="cart-footer">
-      <div class="cart-total">
-        <span class="ct-label">Tổng cộng</span>
-        <span class="ct-value" id="cartTotal">0đ</span>
-      </div>
-      <button class="btn-checkout" onclick="window.location.href='<?= SITE_URL ?>/checkout.php'">Tiến hành thanh toán →</button>
-    </div>
-  </div>
-</div>
+<?php include __DIR__ . '/includes/nav.php'; ?>
 
-<!-- ══ NAV ══ -->
-<nav>
-  <div class="nav-inner">
-    <a class="logo" href="<?= SITE_URL ?>/index.php">
-      <img src="<?= SITE_URL ?>/images/logo.png" alt="FROMSHOPWHERE"
-           style="height:44px;width:auto;object-fit:contain;filter:drop-shadow(0 0 6px rgba(0,0,0,.3))">
-    </a>
 
-    <ul class="nav-links">
-      <li><a href="<?= SITE_URL ?>/index.php"    <?= $_currentPage==='home'     ?'class="active"':'' ?>>Trang chủ</a></li>
-      <li><a href="<?= SITE_URL ?>/products.php" <?= $_currentPage==='products' ?'class="active"':'' ?>>Sản phẩm</a></li>
-      <li><a href="<?= SITE_URL ?>/blog.php"     <?= $_currentPage==='blog'     ?'class="active"':'' ?>>Blog</a></li>
-      <li><a href="<?= SITE_URL ?>/contact.php"  <?= $_currentPage==='contact'  ?'class="active"':'' ?>>Liên hệ</a></li>
-    </ul>
 
-    <div class="nav-right">
-      <div class="search-wrap">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <input class="search-box" type="search" placeholder="Tìm phần mềm..."
-               onkeydown="if(event.key==='Enter')window.location.href='<?= SITE_URL ?>/products.php?q='+encodeURIComponent(this.value)">
-      </div>
-
-      <button class="theme-toggle" onclick="toggleTheme()" title="Chuyển sáng/tối" aria-label="Theme">
-        <div class="theme-knob" id="themeKnob">☀️</div>
-      </button>
-
-      <div class="cart-btn" onclick="toggleCart()">
-        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 01-8 0"/>
-        </svg>
-        <span class="cart-badge" id="cartCount">0</span>
-      </div>
-
-      <?php if ($_user): ?>
-        <div style="position:relative">
-          <button class="btn-login"
-                  onclick="document.getElementById('userMenu').classList.toggle('open')"
-                  style="cursor:pointer;display:flex;align-items:center;gap:6px">
-            <span style="font-size:16px">👤</span>
-            <?= e($_user['ho_ten']) ?> <span style="font-size:10px;opacity:.7">▾</span>
-          </button>
-          <div id="userMenu" class="user-dropdown">
-            <?php if (isAdmin()): ?>
-            <a href="<?= SITE_URL ?>/admin/">⚙️ Quản trị Admin</a>
-            <?php endif; ?>
-            <a href="<?= SITE_URL ?>/profile.php">👤 Tài khoản</a>
-            <a href="<?= SITE_URL ?>/logout.php">🚪 Đăng xuất</a>
-          </div>
-        </div>
-      <?php else: ?>
-        <a class="btn-login" href="<?= SITE_URL ?>/login.php">Đăng nhập</a>
-      <?php endif; ?>
-    </div>
-  </div>
-</nav>
-
-<style>
-.user-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:300;display:none;flex-direction:column;gap:2px}
-.user-dropdown.open{display:flex}
-.user-dropdown a{padding:9px 13px;border-radius:8px;text-decoration:none;color:var(--text);font-size:13px;font-weight:500;transition:background .12s}
-.user-dropdown a:hover{background:var(--bg-alt);color:var(--green-600,#0A8A4C)}
-</style>
-<script>
-document.addEventListener('click', e => {
-  const m = document.getElementById('userMenu');
-  if (m && !m.parentElement.contains(e.target)) m.classList.remove('open');
-});
-</script>
+<script src="assets/js/profile.js"></script>
 
 <div class="page-header">
   <div class="page-header-inner">
+    <div class="ph-eyebrow"><span class="mini-seal mini-seal-light">👤 Tài khoản</span></div>
     <h1>Tài khoản của tôi</h1>
     <p>Quản lý thông tin và lịch sử đơn hàng</p>
   </div>
@@ -256,6 +144,7 @@ document.addEventListener('click', e => {
         <button class="ptab on" onclick="showTab('info',this)">👤 Thông tin</button>
         <button class="ptab" onclick="showTab('pass',this)">🔒 Đổi mật khẩu</button>
         <button class="ptab" onclick="showTab('orders',this)">🛒 Đơn hàng</button>
+        <button class="ptab" onclick="showTab('referral',this)">🎁 Giới thiệu bạn bè</button>
       </div>
 
       <!-- Tab: Thông tin -->
@@ -263,6 +152,7 @@ document.addEventListener('click', e => {
         <div class="info-box">
           <h3>Thông tin cá nhân</h3>
           <form method="POST">
+      <?= csrfField() ?>
             <input type="hidden" name="action" value="update_info">
             <div class="form-group">
               <label class="form-label">Họ và tên</label>
@@ -294,6 +184,7 @@ document.addEventListener('click', e => {
         <div class="info-box">
           <h3>Đổi mật khẩu</h3>
           <form method="POST">
+      <?= csrfField() ?>
             <input type="hidden" name="action" value="change_pass">
             <div class="form-group">
               <label class="form-label">Mật khẩu hiện tại</label>
@@ -324,7 +215,7 @@ document.addEventListener('click', e => {
             </div>
           <?php else: ?>
           <table class="ord-tbl">
-            <thead><tr><th>#</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày đặt</th></tr></thead>
+            <thead><tr><th>#</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày đặt</th><th></th></tr></thead>
             <tbody>
             <?php foreach($orders as $o):
               [$cls,$lbl]=match($o['trang_thai']){
@@ -347,7 +238,7 @@ document.addEventListener('click', e => {
       <?php foreach ($items as $it):
         $imgPath = $it['hinh_anh'] ?? '';
         if ($imgPath === '') {
-            $imgUrl = SITE_URL . '/images/default.jpg';
+            $imgUrl = SITE_URL . '/images/ui/default.jpg';
         } else {
             $path = str_contains($imgPath, '/') ? $imgPath : 'products/' . $imgPath;
             $imgUrl = SITE_URL . '/images/' . ltrim($path, '/');
@@ -357,7 +248,7 @@ document.addEventListener('click', e => {
       <div class="ord-product-row">
         <img src="<?= e($imgUrl) ?>" alt="<?= e($it['ten_san_pham']) ?>"
              width="48" height="48"
-             onerror="this.src='<?= SITE_URL ?>/images/default.jpg'">
+             onerror="this.src='<?= SITE_URL ?>/images/ui/default.jpg'">
         <div>
           <div class="ord-product-name"><?= e($it['ten_san_pham']) ?></div>
           <div class="ord-product-meta">×<?= (int)$it['so_luong'] ?> · <?= fmtVND($lineTotal) ?></div>
@@ -370,11 +261,59 @@ document.addEventListener('click', e => {
               <td style="font-weight:700;color:var(--green-600,#0A8A4C)"><?= fmtVND($o['tong_tien'])?></td>
               <td><span class="badge <?= $cls?>"><?= $lbl?></span></td>
               <td style="color:var(--text-muted)"><?= date('d/m/Y H:i',strtotime($o['ngay_dat']))?></td>
+              <td><a class="btn-detail" style="white-space:nowrap;font-size:12px;padding:6px 12px" href="<?= SITE_URL ?>/order-detail.php?id=<?= (int)$o['id'] ?>">Chi tiết →</a></td>
             </tr>
             <?php endforeach;?>
             </tbody>
           </table>
           <?php endif;?>
+        </div>
+      </div>
+
+      <!-- Tab: Giới thiệu bạn bè -->
+      <div class="tab-content" id="tab-referral">
+        <div class="info-box">
+          <h3>🎁 Giới thiệu bạn bè, nhận quà</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+            Chia sẻ link dưới đây cho bạn bè. Khi họ đăng ký và <strong>mua hàng thành công lần đầu tiên</strong>,
+            bạn sẽ nhận ngay mã giảm giá <strong><?= REFERRAL_REWARD_PERCENT ?>%</strong> cho lần mua tiếp theo.
+          </p>
+
+          <div class="ref-link-row">
+            <input type="text" id="refLinkInput" class="form-input" readonly value="<?= e($refStats['link']) ?>">
+            <button type="button" class="btn-detail" onclick="copyRefLink()">📋 Sao chép</button>
+          </div>
+
+          <div class="ref-stats-row">
+            <div class="ref-stat"><strong><?= $refStats['total'] ?></strong><span>Đã giới thiệu</span></div>
+            <div class="ref-stat"><strong><?= $refStats['rewarded'] ?></strong><span>Đã nhận quà</span></div>
+            <div class="ref-stat"><strong><?= REFERRAL_REWARD_PERCENT ?>%</strong><span>Ưu đãi mỗi lượt</span></div>
+          </div>
+
+          <?php if (empty($refStats['list'])): ?>
+            <p style="font-size:13px;color:var(--text-muted);text-align:center;padding:24px 0">
+              Bạn chưa giới thiệu ai. Hãy chia sẻ link ở trên nhé!
+            </p>
+          <?php else: ?>
+            <table class="ord-tbl">
+              <thead><tr><th>Người được giới thiệu</th><th>Ngày tham gia</th><th>Trạng thái</th></tr></thead>
+              <tbody>
+                <?php foreach ($refStats['list'] as $r): ?>
+                <tr>
+                  <td><?= e($r['ho_ten']) ?></td>
+                  <td style="color:var(--text-muted)"><?= date('d/m/Y', strtotime($r['ngay_tao'])) ?></td>
+                  <td>
+                    <?php if ($r['da_thuong']): ?>
+                      <span class="badge b-tt">🎁 Đã tặng <?= e($r['coupon_code']) ?></span>
+                    <?php else: ?>
+                      <span class="badge b-cho">Chờ đơn hàng đầu tiên</span>
+                    <?php endif; ?>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          <?php endif; ?>
         </div>
       </div>
     </div>
@@ -393,27 +332,5 @@ document.addEventListener('click', e => {
   </div>
 </footer>
 
-<script src="shared.js"></script>
-<script>
-function showTab(name, btn) {
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('on'));
-  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('on'));
-  document.getElementById('tab-' + name).classList.add('on');
-  btn.classList.add('on');
-}
-document.addEventListener('DOMContentLoaded', () => {
-  restoreTheme(); updateCartBadge(); syncCartPanel();
-  bindVnPhoneInput(document.getElementById('profilePhone'));
-  <?php if($msg && str_contains($msg,'mật khẩu')): ?>
-  showTab('pass', document.querySelectorAll('.ptab')[1]);
-  <?php endif; ?>
-  const params = new URLSearchParams(window.location.search);
-if (params.get('tab') === 'orders') {
-  const ordersTab = document.querySelectorAll('.ptab')[2];
-  if (ordersTab) showTab('orders', ordersTab);
-}
-});
-
-</script>
 </body>
 </html>

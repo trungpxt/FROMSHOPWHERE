@@ -12,14 +12,16 @@ if ($id <= 0) {
 }
 
 // 2. Truy vấn lấy thông tin chi tiết sản phẩm hiện tại
+// Admin được phép xem trước cả sản phẩm đang ẩn (trang_thai='an'); khách thường chỉ xem được sản phẩm đang hiển thị
 try {
-    $stmt = db()->prepare("
+    $sql = "
         SELECT p.*, c.ten_danh_muc 
         FROM products p 
         JOIN categories c ON p.danh_muc_id = c.id 
-        WHERE p.id = :id AND p.trang_thai = 'hien'
+        WHERE p.id = :id" . (isAdmin() ? "" : " AND p.trang_thai != 'an'") . "
         LIMIT 1
-    ");
+    ";
+    $stmt = db()->prepare($sql);
     $stmt->execute([':id' => $id]);
     $product = $stmt->fetch();
 
@@ -28,32 +30,39 @@ try {
         exit;
     }
 } catch (PDOException $ex) {
-    die("Lỗi CSDL: " . $ex->getMessage());
+    error_log('product-demo.php DB error: ' . $ex->getMessage());
+    header('Location: error.php');
+    exit;
 }
 
-// 3. Lấy toàn bộ sản phẩm để làm mục "Sản phẩm liên quan"
+// 3. Sản phẩm liên quan (cùng danh mục, khác sản phẩm hiện tại) — trước đây
+//    trang này nhúng TOÀN BỘ catalog vào HTML rồi lọc bằng JS, rất nặng khi
+//    shop có nhiều sản phẩm. Giờ truy vấn thẳng, chỉ lấy đúng số cần hiển thị.
 try {
-    $stmtAll = db()->prepare("
-        SELECT p.*, c.ten_danh_muc 
-        FROM products p 
-        JOIN categories c ON p.danh_muc_id = c.id 
-        WHERE p.trang_thai = 'hien'
+    $stmtRel = db()->prepare("
+        SELECT p.*, c.ten_danh_muc
+        FROM products p
+        JOIN categories c ON p.danh_muc_id = c.id
+        WHERE p.trang_thai != 'an' AND p.danh_muc_id = :cat_id AND p.id != :id
+        ORDER BY RAND()
+        LIMIT 8
     ");
-    $stmtAll->execute();
-    $dbAllProducts = $stmtAll->fetchAll();
+    $stmtRel->execute([':cat_id' => $product['danh_muc_id'], ':id' => $id]);
+    $relatedProducts = $stmtRel->fetchAll();
 } catch (PDOException $ex) {
-    $dbAllProducts = [];
+    $relatedProducts = [];
 }
 
-$jsAllProducts = [];
-foreach ($dbAllProducts as $p) {
-    $jsAllProducts[] = [
+$jsRelatedProducts = [];
+foreach ($relatedProducts as $p) {
+    $jsRelatedProducts[] = [
         'id' => (int)$p['id'],
         'name' => $p['ten_san_pham'],
         'cat' => $p['ten_danh_muc'],
         'price' => (float)$p['gia_ban'],
         'oldPrice' => $p['gia_goc'] ? (float)$p['gia_goc'] : null,
-        'image' => !empty($p['hinh_anh']) ? "images/" . $p['hinh_anh'] : "images/default.jpg",
+        'image' => !empty($p['hinh_anh']) ? "images/" . $p['hinh_anh'] : "images/ui/default.jpg",
+        'hinh_anh' => $p['hinh_anh'] ?? '',
         'isNew' => (int)$p['la_moi']
     ];
 }
@@ -62,123 +71,119 @@ function formatVND($amount) {
     return number_format($amount, 0, ',', '.') . 'đ';
 }
 
+// 4. Điểm đánh giá trung bình + số lượt đánh giá (chỉ tính bình luận gốc có sao)
+$avgRating = 0.0;
+$ratingCount = 0;
+try {
+    $rStmt = db()->prepare(
+        "SELECT ROUND(AVG(rating),1) avg_r, COUNT(*) c FROM product_reviews
+         WHERE product_id = :id AND rating IS NOT NULL"
+    );
+    $rStmt->execute([':id' => $id]);
+    $rRow = $rStmt->fetch();
+    $avgRating   = $rRow && $rRow['avg_r'] ? (float)$rRow['avg_r'] : 0.0;
+    $ratingCount = $rRow ? (int)$rRow['c'] : 0;
+} catch (Exception $e) {
+    // Bảng product_reviews có thể chưa được tạo -> bỏ qua, hiển thị 0
+}
+
+// 5. Số lượng đã bán THẬT (trước đây hiển thị cứng "1.2k+" giả — giờ tính
+//    từ đơn hàng thật đã thanh toán/hoàn thành)
+$soldCount = 0;
+try {
+    $soldStmt = db()->prepare(
+        "SELECT COALESCE(SUM(oi.so_luong),0) FROM order_items oi
+         JOIN orders o ON o.id = oi.don_hang_id
+         WHERE oi.san_pham_id = :id AND o.trang_thai IN ('da_thanh_toan','hoan_thanh')"
+    );
+    $soldStmt->execute([':id' => $id]);
+    $soldCount = (int) $soldStmt->fetchColumn();
+} catch (Exception $e) {}
+
 $productImage = !empty($product['hinh_anh']) ? "images/" . $product['hinh_anh'] : "images/default.jpg";
+
+$seoDesc = trim((string)($product['mo_ta'] ?? ''));
+$seoDesc = preg_replace('/\s+/', ' ', $seoDesc);
+if ($seoDesc === '') {
+    $seoDesc = $product['ten_san_pham'] . ' — phần mềm bản quyền chính hãng, giao key tự động, hỗ trợ cài đặt 24/7 tại FROMSHOPWHERE.';
+}
+if (mb_strlen($seoDesc) > 155) {
+    $seoDesc = mb_substr($seoDesc, 0, 152) . '...';
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?php echo htmlspecialchars($product['ten_san_pham']); ?> — Chi tiết sản phẩm</title>
-<link rel="stylesheet" href="style.css">
+<title><?= htmlspecialchars($product['ten_san_pham']) ?> — Mua Bản Quyền Giá Rẻ | FROMSHOPWHERE</title>
+<meta name="description" content="<?= htmlspecialchars($seoDesc) ?>">
+<link rel="canonical" href="<?= SITE_URL ?>/product-demo.php?id=<?= (int)$product['id'] ?>">
+<meta property="og:type" content="product">
+<meta property="og:title" content="<?= htmlspecialchars($product['ten_san_pham']) ?> — FROMSHOPWHERE">
+<meta property="og:description" content="<?= htmlspecialchars($seoDesc) ?>">
+<meta property="og:image" content="<?= SITE_URL ?>/<?= htmlspecialchars($productImage) ?>">
+<meta property="og:url" content="<?= SITE_URL ?>/product-demo.php?id=<?= (int)$product['id'] ?>">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
+<script type="application/ld+json">
+<?php
+$ldProduct = [
+    '@context'    => 'https://schema.org',
+    '@type'       => 'Product',
+    'name'        => $product['ten_san_pham'],
+    'description' => $seoDesc,
+    'image'       => SITE_URL . '/' . $productImage,
+    'category'    => $product['ten_danh_muc'],
+    'sku'         => 'FSW-' . $product['id'],
+    'offers'      => [
+        '@type'         => 'Offer',
+        'url'           => SITE_URL . '/product-demo.php?id=' . (int)$product['id'],
+        'priceCurrency' => 'VND',
+        'price'         => (string)(int)$product['gia_ban'],
+        'availability'  => $product['trang_thai'] === 'het_hang'
+            ? 'https://schema.org/OutOfStock'
+            : 'https://schema.org/InStock',
+    ],
+];
+if (!empty($product['thuong_hieu'])) {
+    $ldProduct['brand'] = ['@type' => 'Brand', 'name' => $product['thuong_hieu']];
+}
+if ($ratingCount > 0) {
+    $ldProduct['aggregateRating'] = [
+        '@type'       => 'AggregateRating',
+        'ratingValue' => (string)round($avgRating, 1),
+        'reviewCount' => (string)$ratingCount,
+    ];
+}
+echo json_encode($ldProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+?>
+</script>
+<script type="application/ld+json">
+<?php
+echo json_encode([
+    '@context' => 'https://schema.org',
+    '@type'    => 'BreadcrumbList',
+    'itemListElement' => [
+        ['@type'=>'ListItem','position'=>1,'name'=>'Trang chủ','item'=>SITE_URL.'/index.php'],
+        ['@type'=>'ListItem','position'=>2,'name'=>'Sản phẩm','item'=>SITE_URL.'/products.php'],
+        ['@type'=>'ListItem','position'=>3,'name'=>$product['ten_danh_muc'],'item'=>SITE_URL.'/products.php?cat='.urlencode($product['ten_danh_muc'])],
+        ['@type'=>'ListItem','position'=>4,'name'=>$product['ten_san_pham']],
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+?>
+</script>
 </head>
 <body>
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 
-<?php
-/* ── inline nav ── */
-if (!defined('SITE_URL')) require_once __DIR__ . '/config.php';
-startSession();
-$_user        = currentUser();
-$_currentPage = $currentPage ?? '';
-?>
-<!-- ── TOAST ── -->
-<div class="toast" id="toast"></div>
+<?php include __DIR__ . '/includes/nav.php'; ?>
 
-<!-- ── CART OVERLAY ── -->
-<div class="cart-overlay" id="cartOverlay" onclick="closeCartOnBackdrop(event)">
-  <div class="cart-panel">
-    <div class="cart-header">
-      <h3>Giỏ hàng</h3>
-      <button class="close-btn" onclick="toggleCart()">✕</button>
-    </div>
-    <div class="cart-items" id="cartItems">
-      <div style="text-align:center;padding:48px 0">
-        <div style="font-size:40px;margin-bottom:12px">🛒</div>
-        <p style="color:var(--text-muted);font-size:14px">Giỏ hàng trống</p>
-      </div>
-    </div>
-    <div class="cart-footer">
-      <div class="cart-total">
-        <span class="ct-label">Tổng cộng</span>
-        <span class="ct-value" id="cartTotal">0đ</span>
-      </div>
-      <button class="btn-checkout" onclick="window.location.href='<?= SITE_URL ?>/checkout.php'">Tiến hành thanh toán →</button>
-    </div>
-  </div>
-</div>
 
-<!-- ══ NAV ══ -->
-<nav>
-  <div class="nav-inner">
-    <a class="logo" href="<?= SITE_URL ?>/index.php">
-      <img src="<?= SITE_URL ?>/images/logo.png" alt="FROMSHOPWHERE"
-           style="height:44px;width:auto;object-fit:contain;filter:drop-shadow(0 0 6px rgba(0,0,0,.3))">
-    </a>
+<link rel="stylesheet" href="assets/css/product-demo.css">
 
-    <ul class="nav-links">
-      <li><a href="<?= SITE_URL ?>/index.php"    <?= $_currentPage==='home'     ?'class="active"':'' ?>>Trang chủ</a></li>
-      <li><a href="<?= SITE_URL ?>/products.php" <?= $_currentPage==='products' ?'class="active"':'' ?>>Sản phẩm</a></li>
-      <li><a href="<?= SITE_URL ?>/blog.php"     <?= $_currentPage==='blog'     ?'class="active"':'' ?>>Blog</a></li>
-      <li><a href="<?= SITE_URL ?>/contact.php"  <?= $_currentPage==='contact'  ?'class="active"':'' ?>>Liên hệ</a></li>
-    </ul>
-
-    <div class="nav-right">
-      <div class="search-wrap">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <input class="search-box" type="search" placeholder="Tìm phần mềm..."
-               onkeydown="if(event.key==='Enter')window.location.href='<?= SITE_URL ?>/products.php?q='+encodeURIComponent(this.value)">
-      </div>
-
-      <button class="theme-toggle" onclick="toggleTheme()" title="Chuyển sáng/tối" aria-label="Theme">
-        <div class="theme-knob" id="themeKnob">☀️</div>
-      </button>
-
-      <div class="cart-btn" onclick="toggleCart()">
-        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 01-8 0"/>
-        </svg>
-        <span class="cart-badge" id="cartCount">0</span>
-      </div>
-
-      <?php if ($_user): ?>
-        <div style="position:relative">
-          <button class="btn-login"
-                  onclick="document.getElementById('userMenu').classList.toggle('open')"
-                  style="cursor:pointer;display:flex;align-items:center;gap:6px">
-            <span style="font-size:16px">👤</span>
-            <?= e($_user['ho_ten']) ?> <span style="font-size:10px;opacity:.7">▾</span>
-          </button>
-          <div id="userMenu" class="user-dropdown">
-            <?php if (isAdmin()): ?>
-            <a href="<?= SITE_URL ?>/admin/">⚙️ Quản trị Admin</a>
-            <?php endif; ?>
-            <a href="<?= SITE_URL ?>/profile.php">👤 Tài khoản</a>
-            <a href="<?= SITE_URL ?>/logout.php">🚪 Đăng xuất</a>
-          </div>
-        </div>
-      <?php else: ?>
-        <a class="btn-login" href="<?= SITE_URL ?>/login.php">Đăng nhập</a>
-      <?php endif; ?>
-    </div>
-  </div>
-</nav>
-
-<style>
-.user-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:300;display:none;flex-direction:column;gap:2px}
-.user-dropdown.open{display:flex}
-.user-dropdown a{padding:9px 13px;border-radius:8px;text-decoration:none;color:var(--text);font-size:13px;font-weight:500;transition:background .12s}
-.user-dropdown a:hover{background:var(--bg-alt);color:var(--green-600,#0A8A4C)}
-</style>
-<script>
-document.addEventListener('click', e => {
-  const m = document.getElementById('userMenu');
-  if (m && !m.parentElement.contains(e.target)) m.classList.remove('open');
-});
-</script>
 
 <div class="breadcrumb">
   <a href="index.php">Trang chủ</a>
@@ -201,21 +206,33 @@ document.addEventListener('click', e => {
 
     <div class="pd-right">
       <div class="pd-cat"><?php echo htmlspecialchars($product['ten_danh_muc']); ?></div>
+      <?php if (!empty($product['thuong_hieu'])): ?><div class="pd-brand"><?= e($product['thuong_hieu']) ?></div><?php endif; ?>
       <h2 class="pd-title"><?php echo htmlspecialchars($product['ten_san_pham']); ?></h2>
       
       <div class="pd-meta">
-        <div class="pd-stars">★★★★★ 5.0</div>
+        <div class="pd-stars"><?php
+            $fullStars = (int)round($avgRating);
+            echo str_repeat('★', $fullStars) . str_repeat('☆', 5 - $fullStars);
+            echo ' ' . ($ratingCount > 0 ? number_format($avgRating, 1) : 'Chưa có đánh giá');
+        ?></div>
+        <?php if ($soldCount > 0): ?>
         <div>•</div>
-        <div>Đã bán 1.2k+</div>
+        <div>Đã bán <?= $soldCount >= 1000 ? number_format($soldCount / 1000, 1) . 'k' : $soldCount ?>+</div>
+        <?php endif; ?>
         <div>•</div>
         <div>Mã SP: FSW-<?php echo $product['id']; ?></div>
       </div>
+
+      <?php if ($product['trang_thai'] === 'het_hang'): ?>
+      <div class="pd-outofstock-badge">⚠️ Sản phẩm tạm hết hàng</div>
+      <?php endif; ?>
 
       <div class="pd-price-box">
         <span class="pd-price"><?php echo formatVND($product['gia_ban']); ?></span>
         <?php if (!empty($product['gia_goc']) && $product['gia_goc'] > $product['gia_ban']): ?>
           <span class="pd-old-price"><?php echo formatVND($product['gia_goc']); ?></span>
         <?php endif; ?>
+        <?php if ($product['trang_thai'] !== 'het_hang'): ?><span class="mini-seal">✓ Chính hãng</span><?php endif; ?>
       </div>
 
       <div class="pd-desc">
@@ -223,6 +240,10 @@ document.addEventListener('click', e => {
       </div>
 
       <div class="pd-actions">
+        <?php if ($product['trang_thai'] === 'het_hang'): ?>
+        <button class="btn-buy-now" disabled style="opacity:.5;cursor:not-allowed">Tạm hết hàng</button>
+        <button class="btn-add-cart" disabled style="opacity:.5;cursor:not-allowed">Tạm hết hàng</button>
+        <?php else: ?>
         <button class="btn-buy-now" 
     onclick="buyNow(
         <?= (int)$product['id'] ?>, 
@@ -233,19 +254,20 @@ document.addEventListener('click', e => {
     Mua ngay
 </button>
         <button class="btn-add-cart" onclick="addToCart(<?php echo $product['id']; ?>,'<?php echo addslashes($product['ten_san_pham']); ?>',<?php echo (float)$product['gia_ban']; ?>,'<?php echo addslashes($product['hinh_anh'] ?? ''); ?>')">Thêm giỏ hàng</button>
+        <?php endif; ?>
       </div>
 
       <div class="pd-features">
         <div class="pd-feat-item">
-          <span class="pd-feat-icon">✓</span>
+          <span class="pd-feat-icon">⚡</span>
           <span>Giao hàng tự động trong 5 giây qua Email</span>
         </div>
         <div class="pd-feat-item">
-          <span class="pd-feat-icon">✓</span>
+          <span class="pd-feat-icon">🔑</span>
           <span>Key chính hãng 100% bảo hành trọn đời ổn định</span>
         </div>
         <div class="pd-feat-item">
-          <span class="pd-feat-icon">✓</span>
+          <span class="pd-feat-icon">🎧</span>
           <span>Hỗ trợ kỹ thuật 24/7 Ultraview/Teamview miễn phí</span>
         </div>
       </div>
@@ -255,7 +277,7 @@ document.addEventListener('click', e => {
 
   <div class="pd-tabs-nav">
     <button class="pd-tab-btn active" onclick="switchTab(this,'desc')">Chi tiết sản phẩm</button>
-    <button class="pd-tab-btn" onclick="switchTab(this,'reviews')">Đánh giá khách hàng (3)</button>
+    <button class="pd-tab-btn" onclick="switchTab(this,'reviews')">Đánh giá khách hàng (<span id="reviewCountLabel"><?= $ratingCount ?></span>)</button>
   </div>
 
   <div id="tabDesc" class="pd-tab-content">
@@ -263,6 +285,30 @@ document.addEventListener('click', e => {
   </div>
 
   <div id="tabReviews" class="pd-tab-content" style="display:none">
+     <div class="pd-rating-summary">
+       <div class="pd-rating-avg"><?= $ratingCount > 0 ? number_format($avgRating, 1) : '—' ?></div>
+       <div>
+         <div class="pd-rating-stars-lg"><?php
+            $fullStars2 = (int)round($avgRating);
+            echo str_repeat('★', $fullStars2) . str_repeat('☆', 5 - $fullStars2);
+         ?></div>
+         <div class="pd-rating-count"><?= $ratingCount ?> lượt đánh giá</div>
+       </div>
+     </div>
+
+     <div class="rv-form" id="rvForm">
+       <?php if ($_user): ?>
+         <div>Đánh giá của bạn:</div>
+         <div class="star-picker" id="starPicker">
+           <span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span>
+         </div>
+         <textarea id="rvText" placeholder="Chia sẻ cảm nhận của bạn về sản phẩm này..."></textarea>
+         <button type="button" onclick="submitReview()">Gửi đánh giá</button>
+       <?php else: ?>
+         <p class="rv-login-hint">Vui lòng <a href="login.php?redirect=<?= urlencode('product-demo.php?id=' . $id) ?>">đăng nhập</a> để đánh giá sản phẩm này.</p>
+       <?php endif; ?>
+     </div>
+
      <div id="reviewGrid"></div>
   </div>
 
@@ -270,171 +316,28 @@ document.addEventListener('click', e => {
     <h3>Sản phẩm liên quan</h3>
     <div class="products" id="relatedGrid"></div>
   </div>
+
+  <div class="pd-related" id="recentlyViewedWrap" style="display:none">
+    <h3>🕐 Đã xem gần đây</h3>
+    <div class="products" id="recentlyViewedGrid"></div>
+  </div>
 </div>
 
-<footer>
-        <div class="footer-inner">
-            <div class="footer-grid">
-                <div class="footer-brand">
-                    <div style="margin-bottom:12px">
-                        <img src="images/logo.png" alt="FROMSHOPWHERE" style="height:50px;width:auto;object-fit:contain;filter:brightness(1.1) drop-shadow(0 0 4px rgba(0,0,0,.4))">
-                    </div>
-                    <p>Nền tảng mua bán phần mềm bản quyền uy tín hàng đầu Việt Nam. Cam kết giá tốt, giao hàng nhanh và hỗ trợ tận tâm.</p>
-                    <div class="social-links">
-                        <a class="social-link" href="#">f</a>
-                        <a class="social-link" href="#">in</a>
-                        <a class="social-link" href="#">yt</a>
-                        <a class="social-link" href="#">tk</a>
-                    </div>
-                </div>
-                <div class="footer-col">
-                    <h4>Sản phẩm</h4>
-                    <ul>
-                        <li><a href="products.php">Thiết kế đồ hoạ</a></li>
-                        <li><a href="products.php">Văn phòng</a></li>
-                        <li><a href="products.php">Chỉnh sửa video</a></li>
-                        <li><a href="products.php">Bảo mật</a></li>
-                        <li><a href="products.php">Hệ điều hành</a></li>
-                    </ul>
-                </div>
-                <div class="footer-col">
-                    <h4>Hỗ trợ</h4>
-                    <ul>
-                        <li><a href="blog.php">Hướng dẫn cài đặt</a></li>
-                        <li><a href="contact.php">Câu hỏi thường gặp</a></li>
-                        <li><a href="contact.php">Chính sách đổi trả</a></li>
-                        <li><a href="contact.php">Liên hệ hỗ trợ</a></li>
-                    </ul>
-                </div>
-                <div class="footer-col">
-                    <h4>Công ty</h4>
-                    <ul>
-                        <li><a href="#">Giới thiệu</a></li>
-                        <li><a href="blog.php">Blog</a></li>
-                        <li><a href="contact.php">Hợp tác</a></li>
-                        <li><a href="#">Điều khoản dịch vụ</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>© 2025 FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
-                <div class="pay-icons">
-                    <div class="pay-badge">VISA</div>
-                    <div class="pay-badge">MC</div>
-                    <div class="pay-badge">MOMO</div>
-                    <div class="pay-badge">ZALO</div>
-                    <div class="pay-badge">ATM</div>
-                </div>
-            </div>
-        </div>
-    </footer>
+<?php include __DIR__ . '/includes/footer.php'; ?>
 
-<script src="shared.js"></script>
 <script>
-  const ALL_PRODUCTS = <?php echo json_encode($jsAllProducts); ?>;
-  
-  const CURRENT_PRODUCT = {
-      id: <?php echo (int)$product['id']; ?>,
-      name: <?php echo json_encode($product['ten_san_pham']); ?>,
-      cat: <?php echo json_encode($product['ten_danh_muc']); ?>
-  };
-
-  function fmtVND(num) {
-    return new Intl.NumberFormat('vi-VN').format(num) + 'đ';
-  }
-
-  function switchTab(btn, tab) {
-    document.querySelectorAll('.pd-tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    if(tab==='desc') {
-      document.getElementById('tabDesc').style.display='block';
-      document.getElementById('tabReviews').style.display='none';
-    } else {
-      document.getElementById('tabDesc').style.display='none';
-      document.getElementById('tabReviews').style.display='block';
-    }
-  }
-
-  function renderGrid(targetId, list) {
-    const grid = document.getElementById(targetId);
-    if(!grid) return;
-    const siteUrl = '<?= SITE_URL ?>';
-    grid.innerHTML = list.map(p => {
-      const discount = (p.oldPrice && p.oldPrice > p.price) ? Math.round((1 - p.price/p.oldPrice)*100) : 0;
-      const discBadge = discount > 0 ? `<span style="background:#D92B2B;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:20px;margin-left:5px">-${discount}%</span>` : '';
-      const oldPriceHtml = (p.oldPrice && p.oldPrice > p.price) ? `<span style="text-decoration:line-through;color:#aaa;font-size:12px;margin-left:6px">${fmtVND(p.oldPrice)}</span>` : '';
-      const newTag = p.isNew ? `<span style="background:red;color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;margin-left:5px;font-weight:700">MỚI</span>` : '';
-      const nameSafe = (p.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const imgSafe  = (p.image||'').replace('images/', '').replace(/'/g,"\\'");
-      return `
-      <div class="hero-card prod-card-wrap" style="display:flex;flex-direction:column;cursor:default">
-        <div class="hc-icon" style="cursor:pointer;background:#E1F5EE"
-             onclick="window.location.href='product-demo.php?id=${p.id}'">
-          <img src="${p.image}" alt="${p.name}" onerror="this.src='images/default.jpg'">
-        </div>
-        <div class="hc-name" style="cursor:pointer;margin-top:10px"
-             onclick="window.location.href='product-demo.php?id=${p.id}'">${p.name}${newTag}</div>
-        <div class="hc-price" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-          ${fmtVND(p.price)}${oldPriceHtml}${discBadge}
-        </div>
-        <div class="hc-tag" style="margin-bottom:10px">${p.cat}</div>
-        <div style="display:flex;gap:8px;margin-top:auto">
-          <button class="btn-atc" onclick="addToCart(${p.id},'${nameSafe}',${p.price},'${imgSafe}')" title="Thêm vào giỏ">🛒 Thêm vào giỏ</button>
-          <button class="btn-detail" onclick="window.location.href='product-demo.php?id=${p.id}'" title="Chi tiết">Chi tiết</button>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  function buildReviews() {
-    const fake = [
-      { name: "Nguyễn Văn A", role: "Nhà thiết kế đồ họa", stars: 5, date: "Hôm qua", text: "Sản phẩm dùng cực kì mượt mà, kích hoạt bản quyền nhanh trong 5 giây đúng cam kết!" },
-      { name: "Trần Thị B", role: "Kế toán viên", stars: 5, date: "3 ngày trước", text: "Giá rất rẻ so với thị trường, nhân viên hỗ trợ cài đặt qua Ultraview siêu nhiệt tình." },
-      { name: "Lê Minh C", role: "Developer", stars: 4, date: "1 tuần trước", text: "Đã mua lần thứ 2 tại shop, cực kì uy tín và an tâm." }
-    ];
-    const grid = document.getElementById('reviewGrid');
-    if(!grid) return;
-    grid.innerHTML = fake.map(r => `
-      <div class="pd-rv-card">
-        <div class="pd-rv-header">
-          <div class="pd-rv-user">
-            <div class="pd-rv-avatar">${r.name[0]}</div>
-            <div>
-              <div class="pd-rv-name">${r.name}</div>
-              <div class="pd-rv-role">${r.role}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div class="pd-rv-stars">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</div>
-            <div class="pd-rv-date">${r.date}</div>
-          </div>
-        </div>
-        <div class="pd-rv-body">${r.text}</div>
-        <div class="pd-rv-verified">✓ Đã mua sản phẩm này</div>
-      </div>
-    `).join('');
-  }
-
-  function buildRelated() {
-    const related = ALL_PRODUCTS
-      .filter(x => x.id !== CURRENT_PRODUCT.id && x.cat === CURRENT_PRODUCT.cat)
-      .slice(0, 4);
-    if(related.length === 0) {
-      document.querySelector('.pd-related').style.display = 'none';
-      return;
-    }
-    renderGrid('relatedGrid', related);
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    if(typeof restoreTheme === 'function') restoreTheme();
-    if(typeof updateCartBadge === 'function') updateCartBadge();
-    if(typeof updateLoginBtn === 'function') updateLoginBtn();
-    if(typeof syncCartPanel === 'function') syncCartPanel();
-    
-    buildReviews();
-    buildRelated();
-  });
+const RELATED_PRODUCTS = <?= json_encode($jsRelatedProducts, JSON_UNESCAPED_UNICODE) ?>;
+const CURRENT_PRODUCT = {
+  id:  <?= (int)$product['id'] ?>,
+  name: <?= json_encode($product['ten_san_pham'], JSON_UNESCAPED_UNICODE) ?>,
+  cat:  <?= json_encode($product['ten_danh_muc'], JSON_UNESCAPED_UNICODE) ?>,
+  price: <?= (float)$product['gia_ban'] ?>,
+  img: <?= json_encode($product['hinh_anh'] ?? '', JSON_UNESCAPED_UNICODE) ?>
+};
+const SITE_URL_JS = "<?= SITE_URL ?>";
+const PDP_LOGGED_IN = <?= $_user ? 'true' : 'false' ?>;
+const PDP_IS_ADMIN  = <?= ($_user && $_user['vai_tro'] === 'admin') ? 'true' : 'false' ?>;
 </script>
+<script src="assets/js/product-demo.js"></script>
 </body>
 </html>

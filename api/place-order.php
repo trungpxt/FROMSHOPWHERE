@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/mail.php';
+require_once __DIR__ . '/../includes/coupon-lib.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -32,14 +34,14 @@ $payment  = trim($data['phuong_thuc_tt'] ?? 'Chuyển khoản ngân hàng');
 $coupon   = trim($data['ma_giam_gia'] ?? '');
 $coupon   = $coupon !== '' ? strtoupper($coupon) : null;
 
-// Chuẩn hoá từng dòng
+// Chuẩn hoá từng dòng — CHỈ lấy id & số lượng từ client; giá sẽ được tra lại từ DB bên dưới.
+// Không bao giờ tin giá do trình duyệt gửi lên, để khách hàng không thể sửa giá qua DevTools.
 $lines = [];
 foreach ($itemsIn as $row) {
     $pid = (int)($row['id'] ?? 0);
     $qty = max(1, (int)($row['qty'] ?? 1));
-    $price = (float)($row['price'] ?? 0);
-    if ($pid <= 0 || $price < 0) continue;
-    $lines[] = ['id' => $pid, 'qty' => $qty, 'price' => $price];
+    if ($pid <= 0) continue;
+    $lines[] = ['id' => $pid, 'qty' => $qty];
 }
 
 if (count($lines) === 0) {
@@ -48,54 +50,38 @@ if (count($lines) === 0) {
     exit;
 }
 
-$VALID_COUPONS = [
-    'FIRST15' => 15,  // phần trăm giảm
-];
-
-$subtotal = 0;
-foreach ($lines as $l) {
-    $subtotal += $l['price'] * $l['qty'];
-}
-
-$tongTien = $subtotal;
-$giamPhanTram = 0;
-
-if ($coupon !== null) {
-    if (!isset($VALID_COUPONS[$coupon])) {
-        http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Mã giảm giá không hợp lệ']);
-        exit;
-    }
-        // FIRST15: chỉ đơn đầu tiên của user này
-    if ($coupon === 'FIRST15') {
-        $cnt = db()->prepare('SELECT COUNT(*) FROM orders WHERE nguoi_dung_id = ?');
-        $cnt->execute([$userId]);
-        if ((int)$cnt->fetchColumn() > 0) {
-            http_response_code(400);
-            echo json_encode([
-                'ok'    => false,
-                'error' => 'Mã FIRST15 chỉ áp dụng cho đơn hàng đầu tiên',
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-    }
-
-    $giamPhanTram = $VALID_COUPONS[$coupon];
-    $tongTien = (int)round($subtotal * (100 - $giamPhanTram) / 100);
-}
-
 $pdo = db();
 
 try {
     $pdo->beginTransaction();
 
-    // Kiểm tra sản phẩm tồn tại
+    // Tra giá THẬT + kiểm tra sản phẩm tồn tại/đang hiển thị — bỏ qua hoàn toàn giá client gửi lên
     $check = $pdo->prepare("SELECT id, gia_ban FROM products WHERE id = :id AND trang_thai = 'hien' LIMIT 1");
-    foreach ($lines as $l) {
+    foreach ($lines as &$l) {
         $check->execute([':id' => $l['id']]);
-        if (!$check->fetch()) {
+        $row = $check->fetch();
+        if (!$row) {
             throw new RuntimeException('Sản phẩm #' . $l['id'] . ' không tồn tại hoặc đã ẩn');
         }
+        $l['price'] = (float)$row['gia_ban'];
+    }
+    unset($l);
+
+    $subtotal = 0;
+    foreach ($lines as $l) {
+        $subtotal += $l['price'] * $l['qty'];
+    }
+
+    $tongTien = $subtotal;
+    $giamPhanTram = 0;
+
+    if ($coupon !== null) {
+        $check2 = coupon_validate($coupon, $userId);
+        if (!$check2['ok']) {
+            throw new RuntimeException($check2['error']);
+        }
+        $giamPhanTram = $check2['percent'];
+        $tongTien = (int)round($subtotal * (100 - $giamPhanTram) / 100);
     }
 
     $insOrder = $pdo->prepare("
@@ -125,16 +111,35 @@ try {
 
     $pdo->commit();
 
+    // Đánh dấu mã giảm giá (nếu có) đã được sử dụng — chỉ áp dụng cho mã động, FIRST15 bỏ qua
+    if ($coupon !== null) {
+        coupon_mark_used($coupon);
+    }
+
+    // Gửi email xác nhận đặt hàng — không để lỗi gửi mail làm hỏng response đặt hàng
+    $mailSent = sendOrderPlacedEmail($orderId);
+    if (!$mailSent) {
+        error_log('[place-order] Không gửi được email xác nhận cho đơn #' . $orderId);
+    }
+
     echo json_encode([
-        'ok'       => true,
-        'order_id' => $orderId,
-        'tong_tien'=> $tongTien,
+        'ok'        => true,
+        'order_id'  => $orderId,
+        'tong_tien' => $tongTien,
+        'mail_sent' => $mailSent,
     ], JSON_UNESCAPED_UNICODE);
 
+} catch (RuntimeException $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
+    error_log('api/place-order.php error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Không lưu được đơn: ' . $e->getMessage()]);
+    echo json_encode(['ok' => false, 'error' => 'Không lưu được đơn hàng. Vui lòng thử lại hoặc liên hệ hỗ trợ.']);
 }

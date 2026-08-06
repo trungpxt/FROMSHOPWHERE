@@ -5,6 +5,7 @@ requireAdmin();
 $msg = ''; $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
     $action = $_POST['action'] ?? '';
     if ($action === 'save') {
         $id       = (int)($_POST['id'] ?? 0);
@@ -15,22 +16,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $color    = trim($_POST['tag_color'] ?? '#065E34');
         $rt       = max(1,(int)($_POST['read_time'] ?? 5));
         $tt       = $_POST['trang_thai'] ?? 'nhap';
-        $excerpt  = mb_substr(strip_tags($noi_dung), 0, 250);
+        $hinh     = $_POST['hinh_anh_cu'] ?? '';
+
         if (!$tieu_de || !$noi_dung) {
             $error = 'Vui lòng nhập tiêu đề và nội dung.';
         } else {
+            if (!empty($_FILES['hinh_anh']['name'])) {
+                $ext = strtolower(pathinfo($_FILES['hinh_anh']['name'], PATHINFO_EXTENSION));
+                if (!in_array($ext, ['jpg','jpeg','png','webp'])) { $error = 'Định dạng ảnh không hợp lệ.'; }
+                elseif ($_FILES['hinh_anh']['size'] > 5*1024*1024) { $error = 'Ảnh tối đa 5MB.'; }
+                elseif ($_FILES['hinh_anh']['error'] !== UPLOAD_ERR_OK) { $error = 'Tải ảnh lên thất bại (mã lỗi '.$_FILES['hinh_anh']['error'].').'; }
+                else {
+                    $destDir = __DIR__ . '/../images/blog';
+                    if (!is_dir($destDir)) { @mkdir($destDir, 0775, true); }
+                    $baseSlug = strtolower(trim(preg_replace('/[^a-z0-9]+/i','-',$tieu_de),'-')) ?: 'bai-viet';
+                    $fn  = $baseSlug.'-'.time().'.'.$ext;
+                    $dst = $destDir.'/'.$fn;
+                    if (is_writable($destDir) && move_uploaded_file($_FILES['hinh_anh']['tmp_name'], $dst)) $hinh = 'blog/'.$fn;
+                    else $error = 'Không upload được ảnh (kiểm tra quyền ghi thư mục images/blog).';
+                }
+            }
+
+            // File Word (.docx) đính kèm — lưu NGUYÊN FILE gốc (không quy đổi ra HTML nữa),
+            // rồi chèn vào nội dung một "mốc" trỏ tới file đó. Khi hiển thị công khai, trang
+            // blog-detail.php sẽ tự render trực tiếp file .docx này bằng docx-preview.js
+            // (xem assets/js/blog-detail.js) -> luôn đúng y hệt file gốc, không lệch do quy đổi.
+            if (!$error && !empty($_FILES['word_file']['name'])) {
+                $wext = strtolower(pathinfo($_FILES['word_file']['name'], PATHINFO_EXTENSION));
+                if ($wext !== 'docx') { $error = 'File đính kèm phải là .docx.'; }
+                elseif ($_FILES['word_file']['size'] > 20*1024*1024) { $error = 'File Word tối đa 20MB.'; }
+                elseif ($_FILES['word_file']['error'] !== UPLOAD_ERR_OK) { $error = 'Tải file Word lên thất bại (mã lỗi '.$_FILES['word_file']['error'].').'; }
+                else {
+                    if (!is_dir(UPLOAD_BLOG_DOCS_DIR)) { @mkdir(UPLOAD_BLOG_DOCS_DIR, 0775, true); }
+                    $baseSlug = strtolower(trim(preg_replace('/[^a-z0-9]+/i','-',$tieu_de),'-')) ?: 'bai-viet';
+                    $wfn  = $baseSlug.'-'.time().'.docx';
+                    $wdst = UPLOAD_BLOG_DOCS_DIR.$wfn;
+                    if (is_writable(UPLOAD_BLOG_DOCS_DIR) && move_uploaded_file($_FILES['word_file']['tmp_name'], $wdst)) {
+                        $wordMarker = '<!--fsw-word-file:blog-docs/'.$wfn.'-->';
+                        $noi_dung = (strpos($noi_dung, '[[FSW_WORD_FILE]]') !== false)
+                            ? str_replace('[[FSW_WORD_FILE]]', $wordMarker, $noi_dung)
+                            : trim($noi_dung)."\n\n".$wordMarker."\n\n";
+                    } else {
+                        $error = 'Không upload được file Word (kiểm tra quyền ghi thư mục uploads/blog-docs).';
+                    }
+                }
+            }
+            // Dọn "mốc" còn sót lại nếu người dùng bấm nút chọn file nhưng cuối cùng không có file thật đi kèm
+            $noi_dung = str_replace('[[FSW_WORD_FILE]]', '', $noi_dung);
+        }
+
+        // Tóm tắt (excerpt) tính SAU khi nội dung đã chốt (gồm cả mốc file Word vừa chèn)
+        $plain = preg_replace('/^[#>*•\-\s]+/m', '', strip_tags(preg_replace('/<!--fsw-word-file:[^>]*-->/', ' [File Word đính kèm] ', $noi_dung))); // bỏ ##, ###, •, --- ở đầu dòng
+        $plain = str_replace(['**','*'], '', $plain); // bỏ ký tự đậm/nghiêng
+        $plain = preg_replace('/\s+/', ' ', trim($plain));
+        $excerpt  = mb_substr($plain, 0, 250);
+
+        if (!$error) {
             if ($id) {
-                db()->prepare("UPDATE posts SET tieu_de=:td,noi_dung=:nd,excerpt=:ex,tag=:tag,icon=:ic,tag_color=:tc,read_time=:rt,trang_thai=:tt WHERE id=:id")
-                   ->execute([':td'=>$tieu_de,':nd'=>$noi_dung,':ex'=>$excerpt,':tag'=>$tag,':ic'=>$icon,':tc'=>$color,':rt'=>$rt,':tt'=>$tt,':id'=>$id]);
+                db()->prepare("UPDATE posts SET tieu_de=:td,noi_dung=:nd,excerpt=:ex,tag=:tag,icon=:ic,tag_color=:tc,read_time=:rt,trang_thai=:tt,hinh_anh=:ha WHERE id=:id")
+                   ->execute([':td'=>$tieu_de,':nd'=>$noi_dung,':ex'=>$excerpt,':tag'=>$tag,':ic'=>$icon,':tc'=>$color,':rt'=>$rt,':tt'=>$tt,':ha'=>$hinh,':id'=>$id]);
                 $msg = 'Đã cập nhật bài viết.';
             } else {
                 $count = (int)db()->query("SELECT COUNT(*) FROM posts")->fetchColumn();
                 $slug  = 'bai-viet-'.($count+1);
-                $i=1; while(db()->query("SELECT COUNT(*) FROM posts WHERE slug='$slug'")->fetchColumn()>0) $slug='bai-viet-'.($count+1).'-'.$i++;
-                db()->prepare("INSERT INTO posts (tac_gia_id,tieu_de,slug,noi_dung,excerpt,tag,icon,tag_color,read_time,trang_thai) VALUES (?,?,?,?,?,?,?,?,?,?)")
-                   ->execute([$_SESSION['user_id'],$tieu_de,$slug,$noi_dung,$excerpt,$tag,$icon,$color,$rt,$tt]);
+                $i=1; while(true){ $chk=db()->prepare("SELECT COUNT(*) FROM posts WHERE slug=:s"); $chk->execute([':s'=>$slug]); if(!$chk->fetchColumn()) break; $slug='bai-viet-'.($count+1).'-'.$i++; }
+                db()->prepare("INSERT INTO posts (tac_gia_id,tieu_de,slug,noi_dung,excerpt,tag,icon,tag_color,read_time,trang_thai,hinh_anh) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+                   ->execute([$_SESSION['user_id'],$tieu_de,$slug,$noi_dung,$excerpt,$tag,$icon,$color,$rt,$tt,$hinh]);
                 $msg = 'Đã thêm bài viết mới.';
             }
+        }
+
+        // Lưu thất bại -> mở lại modal với dữ liệu vừa nhập, kèm thông báo lỗi (trước đây modal tự đóng và mất hết dữ liệu)
+        if ($error) {
+            $reopenPost = [
+                'id'=>$id,'tieu_de'=>$tieu_de,'noi_dung'=>$noi_dung,'tag'=>$tag,'icon'=>$icon,
+                'tag_color'=>$color,'read_time'=>$rt,'trang_thai'=>$tt,'hinh_anh'=>$hinh,
+            ];
         }
     }
     if ($action === 'delete') {
@@ -73,9 +134,10 @@ if (isset($_GET['edit'])) {
     $ep->execute([':id'=>(int)$_GET['edit']]);
     $editPost = $ep->fetch();
 }
+if (!empty($reopenPost)) { $editPost = $reopenPost; }
 
 $tag_list = [
-    ['Văn phòng','📄','#185FA5'],['Thiết kế','🎨','#0F6E56'],
+    ['Văn phòng','📄','#185FA5'],['Thiết kế','🎨','#f04923'],
     ['Bảo mật','🛡️','#A32D2D'],['Hướng dẫn','📖','#065E34'],
     ['Doanh nghiệp','💼','#534AB7'],['Developer','💻','#534AB7'],
     ['Mẹo hay','💡','#BA7517'],['Lưu trữ','☁️','#185FA5'],
@@ -85,7 +147,7 @@ $tag_list = [
 function bgByColor($c) {
     $m = [
         '#185FA5'=>'linear-gradient(135deg,#1a3a6b,#2563a8)',
-        '#0F6E56'=>'linear-gradient(135deg,#0a3d30,#0f6e56)',
+        '#f04923'=>'linear-gradient(135deg,#1a0800,#f04923)',
         '#A32D2D'=>'linear-gradient(135deg,#5a1a1a,#a32d2d)',
         '#065E34'=>'linear-gradient(135deg,#022b18,#065e34)',
         '#534AB7'=>'linear-gradient(135deg,#2d2a6e,#534ab7)',
@@ -97,245 +159,31 @@ function bgByColor($c) {
 $admPageTitle = 'Bài đăng — Admin FSW';
 ob_start();
 ?>
-<style>
-/* ── Copy y chang style block của blog.php ── */
-/* ── Biến màu thích ứng light/dark ── */
-body.adm-page.adm-light {
-  --b-green:  #0F6E56;
-  --b-lime:   #0F6E56;
-  --b-lime-d: rgba(15,110,86,.08);
-  --b-border: rgba(0,0,0,.1);
-  --b-card:   #ffffff;
-  --b-card-h: #F8FBF8;
-  --b-text:   #1A1A18;
-  --b-muted:  #5C5B56;
-  --b-faint:  #888780;
-}
-body.adm-page.adm-dark {
-  --b-green:  #5DCAA5;
-  --b-lime:   #E1FCF6;
-  --b-lime-d: rgba(90,220,170,.12);
-  --b-border: rgba(255,255,255,.08);
-  --b-card:   rgba(255,255,255,.04);
-  --b-card-h: rgba(255,255,255,.07);
-  --b-text:   rgba(255,255,255,.88);
-  --b-muted:  rgba(255,255,255,.45);
-  --b-faint:  rgba(255,255,255,.2);
-}
-/* ── PAGE HERO ── */
-.blog-hero {
-  background: linear-gradient(135deg,#011208 0%,#043D22 60%,#065E34 100%);
-  padding: 40px 24px 32px; text-align: center;
-  position: relative; overflow: hidden;
-}
-.blog-hero::before {
-  content:''; position:absolute; inset:0;
-  background-image: linear-gradient(rgba(200,255,0,.04) 1px,transparent 1px), linear-gradient(90deg,rgba(200,255,0,.04) 1px,transparent 1px);
-  background-size: 40px 40px; pointer-events:none;
-}
-.blog-hero-inner { max-width:640px; margin:0 auto; position:relative; z-index:1; }
-.blog-hero h1 { font-size:clamp(20px,3vw,30px); font-weight:800; color:#fff; margin:0 0 8px; letter-spacing:-.02em; line-height:1.2; }
-.blog-hero h1 span { color:var(--b-lime); }
-.blog-hero p { font-size:14px; color:rgba(255,255,255,.5); margin:0 0 18px; }
-.hero-search {
-  display:flex; max-width:480px; margin:0 auto;
-  background:rgba(255,255,255,.07); border:1.5px solid rgba(255,255,255,.14);
-  border-radius:12px; overflow:hidden; transition:border-color .2s,box-shadow .2s;
-}
-.hero-search:focus-within { border-color:var(--b-lime); box-shadow:0 0 0 3px rgba(200,255,0,.12); }
-.hero-search input { flex:1; padding:11px 16px; background:transparent; border:none; outline:none; font-size:14px; color:#fff; font-family:'Plus Jakarta Sans',sans-serif; }
-.hero-search input::placeholder { color:rgba(255,255,255,.35); }
-.hero-search button { padding:11px 20px; background:var(--b-green); border:none; cursor:pointer; color:var(--b-lime); font-size:13px; font-weight:700; font-family:'Plus Jakarta Sans',sans-serif; border-left:1px solid rgba(255,255,255,.1); }
-/* Tag filter strip */
-.blog-filters { background:var(--bg,#111d16); border-bottom:1px solid var(--b-border); padding:0 24px; overflow-x:auto; scrollbar-width:none; }
-.blog-filters::-webkit-scrollbar { display:none; }
-.blog-filters-inner { max-width:1180px; margin:0 auto; display:flex; gap:4px; padding:10px 0; align-items:center; }
-.ftag { white-space:nowrap; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; text-decoration:none; color:var(--b-muted); border:1.5px solid transparent; transition:all .15s; display:inline-flex; align-items:center; gap:5px; }
-.ftag:hover { color:var(--b-text); background:rgba(255,255,255,.06); }
-.ftag.active { background:var(--b-lime-d); color:var(--b-lime); border-color:rgba(200,255,0,.25); }
-.ftag-all { color:var(--b-text); }
-/* Main layout */
-.blog-layout { max-width:1180px; margin:0 auto; padding:32px 24px; display:grid; grid-template-columns:1fr 300px; gap:36px; align-items:start; }
-@media(max-width:900px){ .blog-layout{ grid-template-columns:1fr; } .blog-sidebar{ display:none; } }
-/* Featured post */
-.post-featured { display:flex; flex-direction:row; background:var(--b-card); border:1px solid var(--b-border); border-radius:18px; overflow:hidden; margin-bottom:24px; text-decoration:none; color:inherit; transition:border-color .25s,box-shadow .25s,transform .25s; min-height:260px; }
-.post-featured:hover { border-color:rgba(200,255,0,.3); box-shadow:0 20px 60px rgba(0,0,0,.35); transform:translateY(-3px); }
-.post-featured .pf-thumb { position:relative; overflow:hidden; width:45%; flex-shrink:0; min-height:260px; display:flex; align-items:center; justify-content:center; }
-.post-featured .pf-thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transition:transform .45s; z-index:2; }
-.post-featured:hover .pf-thumb img { transform:scale(1.06); }
-.post-featured .pf-thumb .pf-icon-wrap { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:72px; z-index:1; }
-.post-featured .pf-body { flex:1; padding:28px 26px; display:flex; flex-direction:column; justify-content:center; gap:12px; background:var(--b-card); }
-.post-featured .pf-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.12em; color:var(--b-lime); opacity:.8; }
-.post-featured .pf-title { font-size:clamp(17px,2vw,22px); font-weight:800; color:var(--b-text); line-height:1.3; letter-spacing:-.015em; }
-.post-featured .pf-excerpt { font-size:13.5px; color:var(--b-muted); line-height:1.7; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-.post-featured .pf-meta { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
-.post-featured .pf-date { font-size:12px; color:var(--b-faint); }
-.post-featured .pf-read { font-size:12px; font-weight:700; color:var(--b-lime); }
-/* Post list */
-.post-list { display:flex; flex-direction:column; gap:0; }
-.post-item { display:flex; flex-direction:row; background:var(--b-card); border:1px solid var(--b-border); border-radius:14px; overflow:hidden; text-decoration:none; color:inherit; transition:border-color .2s,background .2s,transform .2s; margin-bottom:12px; }
-.post-item:last-child { margin-bottom:0; }
-.post-item:hover { border-color:rgba(200,255,0,.25); background:var(--b-card-h); transform:translateX(3px); }
-.pi-thumb { width:140px; min-width:140px; overflow:hidden; position:relative; flex-shrink:0; min-height:100px; display:flex; align-items:center; justify-content:center; }
-.pi-thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transition:transform .35s; display:block; z-index:2; }
-.post-item:hover .pi-thumb img { transform:scale(1.07); }
-.pi-thumb-icon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:32px; z-index:1; }
-.pi-body { flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:6px; justify-content:center; background:var(--b-card); }
-.pi-tag { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.09em; }
-.pi-title { font-size:14.5px; font-weight:700; color:var(--b-text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.pi-excerpt { font-size:12.5px; color:var(--b-muted); line-height:1.65; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.pi-meta { display:flex; align-items:center; gap:10px; margin-top:2px; font-size:11.5px; color:var(--b-faint); }
-.pi-meta .read-link { color:var(--b-lime); font-weight:700; margin-left:auto; }
-/* Admin action overlays */
-.adm-overlay { position:absolute; top:6px; right:6px; display:flex; gap:4px; opacity:0; transition:opacity .2s; z-index:10; }
-.post-featured:hover .adm-overlay,
-.post-item:hover .adm-overlay { opacity:1; }
-.adm-mini { width:28px; height:28px; border-radius:7px; border:none; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(6px); transition:transform .15s; }
-.adm-mini:hover { transform:scale(1.1); }
-.adm-mini-e { background:rgba(200,255,0,.9); color:#000; }
-.adm-mini-d { background:rgba(220,50,50,.85); color:#fff; }
-.adm-mini-t { background:rgba(0,0,0,.65); color:#fff; }
-/* Draft dim */
-.post-draft { opacity:.6; }
-.post-draft:hover { opacity:1; }
-/* Draft badge on card */
-.draft-badge { position:absolute; top:10px; left:10px; background:rgba(0,0,0,.7); color:rgba(255,255,255,.7); padding:3px 8px; border-radius:20px; font-size:10px; font-weight:700; z-index:10; text-transform:uppercase; letter-spacing:.05em; }
-/* Result header */
-.result-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; padding-bottom:14px; border-bottom:1px solid var(--b-border); }
-.result-title { font-size:14px; font-weight:700; color:var(--b-text); }
-.result-count { font-size:12px; color:var(--b-muted); }
-/* Sidebar */
-.blog-sidebar { display:flex; flex-direction:column; gap:20px; }
-.sidebar-widget { background:var(--b-card); border:1px solid var(--b-border); border-radius:16px; overflow:hidden; }
-.sw-header { padding:14px 18px; border-bottom:1px solid var(--b-border); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; color:var(--b-muted); }
-.sw-body { padding:14px 18px; }
-.recent-item { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--b-border); text-decoration:none; color:inherit; transition:opacity .15s; }
-.recent-item:last-child { border-bottom:none; padding-bottom:0; }
-.recent-item:hover { opacity:.75; }
-.recent-thumb { width:52px; height:52px; border-radius:9px; overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:22px; }
-.recent-thumb img { width:100%; height:100%; object-fit:cover; }
-.recent-info { flex:1; min-width:0; }
-.recent-title { font-size:12.5px; font-weight:700; color:var(--b-text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:4px; }
-.recent-date { font-size:11px; color:var(--b-muted); }
-.tag-cloud { display:flex; flex-wrap:wrap; gap:6px; }
-.tc-item { padding:5px 12px; border-radius:20px; font-size:11.5px; font-weight:600; background:rgba(255,255,255,.06); border:1px solid var(--b-border); color:var(--b-muted); text-decoration:none; transition:all .15s; display:inline-flex; align-items:center; gap:4px; }
-.tc-item:hover { color:var(--b-lime); border-color:rgba(200,255,0,.25); background:var(--b-lime-d); }
-.stat-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px; }
-.stat-row { display:flex; align-items:center; justify-content:space-between; }
-.stat-row .sl { font-size:13px; color:var(--b-muted); }
-.stat-row .sv { font-size:14px; font-weight:800; color:var(--b-text); }
-/* Blog empty */
-.blog-empty { text-align:center; padding:64px 24px; color:var(--b-muted); }
-.blog-empty .ei { font-size:48px; margin-bottom:12px; }
-
-
-.adm-light .blog-filters, body:not(.dark) .blog-filters {
-  background: #F1EFE8 !important;
-}
-.adm-light .ftag, body:not(.dark) .ftag {
-  color: #5C5B56 !important;
-}
-.adm-light .ftag.active, body:not(.dark) .ftag.active {
-  background: rgba(15,110,86,.1) !important;
-  color: #0F6E56 !important;
-  border-color: rgba(15,110,86,.25) !important;
-}
-/* post-featured in light mode */
-.adm-light .post-featured,
-.adm-light .post-item,
-.adm-light .sidebar-widget {
-  border-color: #D0CFC7 !important;
-}
-.adm-light .post-featured:hover {
-  border-color: rgba(15,110,86,.4) !important;
-  box-shadow: 0 8px 32px rgba(15,110,86,.12) !important;
-}
-.adm-light .post-item:hover {
-  border-color: rgba(15,110,86,.3) !important;
-  background: #F8FBF8 !important;
-  transform: translateX(3px);
-}
-.adm-light .result-header {
-  border-bottom-color: #D0CFC7 !important;
-}
-.adm-light .sw-header {
-  border-bottom-color: #D0CFC7 !important;
-}
-.adm-light .recent-item {
-  border-bottom-color: #E8ECE4 !important;
-}
-.adm-light .tc-item {
-  background: rgba(15,110,86,.07) !important;
-  border-color: rgba(15,110,86,.15) !important;
-  color: #0F6E56 !important;
-}
-.adm-light .tc-item:hover {
-  background: rgba(15,110,86,.14) !important;
-  border-color: rgba(15,110,86,.3) !important;
-}
-
-/* ── EDITOR MODAL ── */
-.editor-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:600; display:none; align-items:flex-start; justify-content:center; padding:24px 20px; overflow-y:auto; backdrop-filter:blur(6px); }
-.editor-overlay.open { display:flex; }
-.editor-panel { background:#fff; border-radius:20px; width:min(860px,100%); margin:auto; box-shadow:0 32px 80px rgba(0,0,0,.3); animation:panelIn .28s cubic-bezier(.22,1,.36,1); }
-@keyframes panelIn { from{opacity:0;transform:translateY(20px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
-.ep-hd { padding:20px 26px 16px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; border-radius:20px 20px 0 0; background:#fff; }
-.ep-badge { background:rgba(200,255,0,.2); color:#065E34; padding:4px 11px; border-radius:20px; font-size:11.5px; font-weight:800; }
-.ep-ttl { font-size:16px; font-weight:800; color:#0A0F0B; letter-spacing:-.02em; }
-.ep-x { width:32px; height:32px; border:none; background:#f0f0f0; border-radius:8px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all .15s; }
-.ep-x:hover { transform:rotate(90deg); background:#e0e0e0; }
-.ep-body { padding:22px 26px; display:flex; flex-direction:column; gap:16px; background:#fff; }
-.ep-foot { padding:14px 26px 22px; border-top:1px solid #eee; display:flex; gap:10px; background:#fff; border-radius:0 0 20px 20px; }
-.fg { display:flex; flex-direction:column; gap:5px; }
-.fg label { font-size:10.5px; font-weight:700; color:#6B7F6E; text-transform:uppercase; letter-spacing:.07em; }
-.fg input,.fg select,.fg textarea { padding:10px 13px; border:1.5px solid #DDE5DE; border-radius:9px; font-size:13px; font-family:'Plus Jakarta Sans',sans-serif; color:#0A0F0B; background:#fff; outline:none; width:100%; transition:border-color .18s,box-shadow .18s; }
-.fg input:focus,.fg select:focus,.fg textarea:focus { border-color:#065E34; box-shadow:0 0 0 3px rgba(6,94,52,.08); }
-.fg textarea { min-height:240px; resize:vertical; line-height:1.75; font-size:13.5px; }
-.fg .f-big { font-size:16px; font-weight:700; padding:12px 14px; }
-.fr2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.fr3 { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; }
-.btn-save { flex:1; padding:12px; background:linear-gradient(135deg,#065E34,#0A8A4E); color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:800; cursor:pointer; font-family:'Plus Jakarta Sans',sans-serif; transition:all .18s; display:flex; align-items:center; justify-content:center; gap:8px; }
-.btn-save:hover { transform:translateY(-2px); box-shadow:0 10px 28px rgba(6,94,52,.28); }
-.btn-cancel-e { padding:12px 18px; border:1.5px solid #DDE5DE; border-radius:10px; background:none; cursor:pointer; font-size:13px; font-weight:600; color:#6B7F6E; font-family:'Plus Jakarta Sans',sans-serif; }
-.btn-cancel-e:hover { border-color:#C8D5CA; color:#0A0F0B; }
-.tb-wrap { display:flex; gap:4px; flex-wrap:wrap; align-items:center; padding:8px; background:#F2F5F2; border-radius:8px; }
-.tb-b { padding:5px 11px; border:1.5px solid #DDE5DE; border-radius:6px; background:#fff; cursor:pointer; font-size:11.5px; font-weight:700; color:#3B4D3E; transition:all .12s; }
-.tb-b:hover { background:#E8FFF3; border-color:#6EE7B7; color:#065E34; }
-.tb-sep { width:1px; background:#DDE5DE; height:18px; margin:0 3px; }
-.char-c { margin-left:auto; font-size:11px; color:#A0B0A2; font-family:'JetBrains Mono',monospace; }
-/* Tag picker */
-.tag-pw { position:relative; }
-.tag-ir { display:flex; align-items:center; border:1.5px solid #DDE5DE; border-radius:9px; overflow:hidden; cursor:pointer; background:#fff; }
-.tag-ir:hover { border-color:#C8D5CA; }
-.tag-pi { padding:10px 10px 10px 13px; font-size:16px; }
-.tag-iv { flex:1; border:none; outline:none; padding:10px 8px; font-size:13px; font-family:'Plus Jakarta Sans',sans-serif; color:#0A0F0B; background:transparent; cursor:pointer; }
-.tag-dd { position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1.5px solid #DDE5DE; border-radius:14px; box-shadow:0 16px 48px rgba(0,0,0,.14); z-index:20; display:none; padding:10px; grid-template-columns:repeat(2,1fr); gap:6px; }
-.tag-dd.open { display:grid; }
-.tag-o { padding:8px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; border:1.5px solid transparent; transition:all .12s; color:#3B4D3E; }
-.tag-o:hover { background:#F2F5F2; border-color:#DDE5DE; }
-.tag-o.sel { background:#E8FFF3; border-color:#6EE7B7; color:#065E34; }
-.si-info { background:#F2F5F2; border-radius:9px; padding:12px 14px; font-size:12px; color:#3B4D3E; line-height:1.7; }
-</style>
+<link rel="stylesheet" href="<?= SITE_URL ?>/assets/css/admin-posts.css?v=<?= CSS_VER ?>">
 <?php
 $admExtraHead = ob_get_clean();
 include __DIR__ . '/../includes/admin-head.php';
 ?>
 <div class="adm">
   <?php include __DIR__ . '/sidebar.php'; ?>
-  <main class="adm-main" style="overflow:hidden">
+  <main class="adm-main">
 
     <!-- TOPBAR -->
     <div class="adm-topbar">
+      <button onclick="document.querySelector('.adm-side').classList.toggle('open');document.querySelector('.adm-side-backdrop').classList.toggle('open')" class="adm-hamburger" aria-label="Mở menu" title="Menu">☰</button>
       <div class="adm-breadcrumb">Admin <span class="sep">/</span> <strong>Bài đăng</strong></div>
       <div class="adm-topbar-right">
-        <a href="<?= admThemeToggleUrl() ?>" class="adm-theme-btn" title="Đổi giao diện sáng/tối"><?= admThemeIcon() ?></a>
-        <a href="<?= SITE_URL ?>/blog.php" target="_blank" class="btn btn-secondary" style="padding:6px 13px;font-size:12px">📰 Xem blog</a>
+        <button onclick="toggleTheme()" class="adm-theme-btn" title="Đổi giao diện sáng/tối" id="admThemeBtn">☀️</button>
+        <a href="<?= SITE_URL ?>/index.php" class="btn btn-secondary" style="padding:6px 13px;font-size:12px">🌐 Xem website</a>
+        <a href="<?= SITE_URL ?>/blog.php" class="btn btn-secondary" style="padding:6px 13px;font-size:12px">📰 Xem blog</a>
+        <a href="<?= SITE_URL ?>/admin/migrate-word-blog.php" class="btn btn-secondary" style="padding:6px 13px;font-size:12px">📄 Chuyển bài cũ sang Word</a>
         <button class="btn btn-primary" onclick="openEditor()">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="1" x2="8" y2="15"/><line x1="1" y1="8" x2="15" y2="8"/></svg>
           Viết bài mới
         </button>
       </div>
     </div>
+    <div class="adm-side-backdrop" onclick="document.querySelector('.adm-side').classList.remove('open');this.classList.remove('open')"></div>
 
     <!-- HERO (giống blog.php) -->
     <div class="blog-hero">
@@ -365,7 +213,7 @@ include __DIR__ . '/../includes/admin-head.php';
 
     <!-- MAIN CONTENT (giống hệt blog.php) -->
     <?php if($msg): ?>
-    <div style="margin:16px 24px;padding:11px 15px;border-radius:9px;background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0;font-size:13px;font-weight:500">✓ <?= htmlspecialchars($msg) ?></div>
+    <div style="margin:16px 24px;padding:11px 15px;border-radius:9px;background:rgba(34,197,94,.1);color:#22c55e;border:1px solid #A7F3D0;font-size:13px;font-weight:500">✓ <?= htmlspecialchars($msg) ?></div>
     <?php endif; ?>
     <?php if($error): ?>
     <div style="margin:16px 24px;padding:11px 15px;border-radius:9px;background:#FEE8E8;color:#D92B2B;border:1px solid #FECACA;font-size:13px;font-weight:500">⚠ <?= htmlspecialchars($error) ?></div>
@@ -411,13 +259,15 @@ include __DIR__ . '/../includes/admin-head.php';
             <!-- Admin controls -->
             <div class="adm-overlay">
               <button class="adm-mini adm-mini-e" title="Sửa"
-                onclick='openEditor(<?= json_encode($featured,JSON_UNESCAPED_UNICODE) ?>)'>✏️</button>
+                onclick='openEditor(<?= e(json_encode($featured,JSON_UNESCAPED_UNICODE)) ?>)'>✏️</button>
               <form method="POST" style="display:contents">
+          <?= csrfField() ?>
                 <input type="hidden" name="action" value="toggle">
                 <input type="hidden" name="id" value="<?= $featured['id'] ?>">
                 <button class="adm-mini adm-mini-t" title="<?= $isDraft_f?'Đăng':'Ẩn' ?>"><?= $isDraft_f?'🚀':'⏸' ?></button>
               </form>
               <form method="POST" style="display:contents" onsubmit="return confirm('Xoá bài này?')">
+          <?= csrfField() ?>
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?= $featured['id'] ?>">
                 <button class="adm-mini adm-mini-d" title="Xoá">🗑</button>
@@ -430,7 +280,7 @@ include __DIR__ . '/../includes/admin-head.php';
             <p class="pf-excerpt"><?= htmlspecialchars(mb_substr($featured['excerpt']??'',0,200)) ?></p>
             <div class="pf-meta">
               <span class="pf-date">📅 <?= date('d/m/Y',strtotime($featured['ngay_dang'])) ?> · ⏱ <?= $featured['read_time']??5 ?> phút · ✍️ <?= htmlspecialchars($featured['tac_gia']) ?></span>
-              <span class="pf-read" style="cursor:pointer" onclick='openEditor(<?= json_encode($featured,JSON_UNESCAPED_UNICODE) ?>)'>✏️ Sửa bài →</span>
+              <span class="pf-read" style="cursor:pointer" onclick='openEditor(<?= e(json_encode($featured,JSON_UNESCAPED_UNICODE)) ?>)'>✏️ Sửa bài →</span>
             </div>
           </div>
         </div>
@@ -457,13 +307,15 @@ include __DIR__ . '/../includes/admin-head.php';
               <!-- Admin controls -->
               <div class="adm-overlay">
                 <button class="adm-mini adm-mini-e" title="Sửa"
-                  onclick='openEditor(<?= json_encode($p,JSON_UNESCAPED_UNICODE) ?>)'>✏️</button>
+                  onclick='openEditor(<?= e(json_encode($p,JSON_UNESCAPED_UNICODE)) ?>)'>✏️</button>
                 <form method="POST" style="display:contents">
+          <?= csrfField() ?>
                   <input type="hidden" name="action" value="toggle">
                   <input type="hidden" name="id" value="<?= $p['id'] ?>">
                   <button class="adm-mini adm-mini-t"><?= $isDraft_p?'🚀':'⏸' ?></button>
                 </form>
                 <form method="POST" style="display:contents" onsubmit="return confirm('Xoá bài «<?= htmlspecialchars($p['tieu_de'],ENT_QUOTES) ?>»?')">
+          <?= csrfField() ?>
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="id" value="<?= $p['id'] ?>">
                   <button class="adm-mini adm-mini-d">🗑</button>
@@ -477,7 +329,7 @@ include __DIR__ . '/../includes/admin-head.php';
               <div class="pi-meta">
                 <span>📅 <?= date('d/m/Y',strtotime($p['ngay_dang'])) ?></span>
                 <span>⏱ <?= $p['read_time']??5 ?> phút</span>
-                <span class="read-link" style="cursor:pointer" onclick='openEditor(<?= json_encode($p,JSON_UNESCAPED_UNICODE) ?>)'>✏️ Sửa →</span>
+                <span class="read-link" style="cursor:pointer" onclick='openEditor(<?= e(json_encode($p,JSON_UNESCAPED_UNICODE)) ?>)'>✏️ Sửa →</span>
               </div>
             </div>
           </div>
@@ -493,8 +345,8 @@ include __DIR__ . '/../includes/admin-head.php';
         <div class="sidebar-widget">
           <div class="sw-header">⚡ Thao tác nhanh</div>
           <div class="sw-body" style="display:flex;flex-direction:column;gap:8px">
-            <button onclick="openEditor()" style="width:100%;padding:10px;background:linear-gradient(135deg,#065E34,#0A8A4E);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif">✍️ Viết bài mới</button>
-            <a href="<?= SITE_URL ?>/blog.php" target="_blank" style="display:block;text-align:center;padding:9px;background:rgba(255,255,255,.06);border:1px solid var(--b-border);border-radius:9px;font-size:13px;font-weight:600;color:var(--b-muted);text-decoration:none">📰 Xem blog công khai</a>
+            <button onclick="openEditor()" style="width:100%;padding:10px;background:linear-gradient(135deg,#065E34,#0A8A4E);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Be Vietnam Pro',sans-serif">✍️ Viết bài mới</button>
+            <a href="<?= SITE_URL ?>/blog.php" style="display:block;text-align:center;padding:9px;background:rgba(255,255,255,.06);border:1px solid var(--b-border);border-radius:9px;font-size:13px;font-weight:600;color:var(--b-muted);text-decoration:none">📰 Xem blog công khai</a>
           </div>
         </div>
 
@@ -503,11 +355,11 @@ include __DIR__ . '/../includes/admin-head.php';
           <div class="sw-header">📌 Bài viết gần đây</div>
           <div class="sw-body" style="padding:10px 14px">
             <?php
-            $recent = db()->query("SELECT id,tieu_de,slug,icon,tag_color,hinh_anh,ngay_dang,trang_thai FROM posts ORDER BY ngay_dang DESC LIMIT 6")->fetchAll();
+            $recent = db()->query("SELECT id,tieu_de,slug,icon,tag_color,hinh_anh,ngay_dang,trang_thai,noi_dung,tag,read_time FROM posts ORDER BY ngay_dang DESC LIMIT 6")->fetchAll();
             foreach($recent as $r):
               $rb = bgByColor($r['tag_color']??'#065E34');
             ?>
-            <a class="recent-item" href="?edit=<?= $r['id'] ?>" onclick="event.preventDefault();openEditor(<?= json_encode($r,JSON_UNESCAPED_UNICODE) ?>)">
+            <a class="recent-item" href="?edit=<?= $r['id'] ?>" onclick="event.preventDefault();openEditor(<?= e(json_encode($r,JSON_UNESCAPED_UNICODE)) ?>)">
               <div class="recent-thumb" style="background:<?= $rb ?>">
                 <?php if(!empty($r['hinh_anh'])): ?>
                   <img src="<?= SITE_URL ?>/images/<?= htmlspecialchars($r['hinh_anh']) ?>" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">
@@ -515,8 +367,15 @@ include __DIR__ . '/../includes/admin-head.php';
                   <?= htmlspecialchars($r['icon']??'📝') ?>
                 <?php endif; ?>
               </div>
+              <?php
+                // Dọn tiêu đề: gộp xuống dòng thật/ký tự "\n" thô về khoảng trắng và giới hạn độ dài,
+                // để widget không bao giờ vỡ layout dù dữ liệu tiêu đề bị lỗi/quá dài.
+                $rTitle = str_replace(['\\n', '\\r', "\n", "\r", "\t"], ' ', (string)($r['tieu_de'] ?? ''));
+                $rTitle = trim(preg_replace('/\s+/u', ' ', $rTitle));
+                if (mb_strlen($rTitle) > 70) $rTitle = mb_substr($rTitle, 0, 70) . '…';
+              ?>
               <div class="recent-info">
-                <div class="recent-title"><?= htmlspecialchars($r['tieu_de']) ?></div>
+                <div class="recent-title"><?= htmlspecialchars($rTitle) ?></div>
                 <div class="recent-date"><?= $r['trang_thai']==='da_dang'?'🟢':'📋' ?> <?= date('d/m/Y',strtotime($r['ngay_dang'])) ?></div>
               </div>
             </a>
@@ -567,12 +426,25 @@ include __DIR__ . '/../includes/admin-head.php';
       </div>
       <button class="ep-x" onclick="closeEditor()">✕</button>
     </div>
-    <form method="POST" id="postForm">
+    <form method="POST" id="postForm" enctype="multipart/form-data">
+          <?= csrfField() ?>
       <input type="hidden" name="action" value="save">
       <input type="hidden" name="id" id="fId" value="0">
       <input type="hidden" name="tag_color" id="fColor" value="#065E34">
       <input type="hidden" name="icon" id="fIconH" value="📝">
+      <input type="hidden" name="hinh_anh_cu" id="fHinhCu" value="">
       <div class="ep-body">
+        <div class="adm-alert adm-alert-err" id="epError" style="display:none"></div>
+        <div class="fg">
+          <label>Ảnh đại diện bài viết</label>
+          <div class="img-upload-area" onclick="document.getElementById('fHinh').click()">
+            <input type="file" name="hinh_anh" id="fHinh" accept="image/*" style="display:none" onchange="previewPostImg(this)">
+            <div id="postImgPreviewWrap">
+              <div style="font-size:28px;margin-bottom:6px">🖼️</div>
+              <div style="font-size:12px;color:var(--ink-3)">Click để chọn ảnh (JPG/PNG/WEBP, tối đa 5MB)</div>
+            </div>
+          </div>
+        </div>
         <div class="fg">
           <label>Tiêu đề *</label>
           <input class="f-big" type="text" name="tieu_de" id="fTitle" placeholder="Nhập tiêu đề bài viết..." required>
@@ -605,7 +477,7 @@ include __DIR__ . '/../includes/admin-head.php';
             <input type="number" name="read_time" id="fRt" value="5" min="1" max="60">
           </div>
         </div>
-        <div class="fg">
+        <div class="fg" id="contentFg">
           <label>Nội dung *</label>
           <div class="tb-wrap">
             <button type="button" class="tb-b" onclick="ins('## Tiêu đề\n\n')">H2</button>
@@ -613,13 +485,23 @@ include __DIR__ . '/../includes/admin-head.php';
             <div class="tb-sep"></div>
             <button type="button" class="tb-b" onclick="ins('**đậm**')"><b>B</b></button>
             <button type="button" class="tb-b" onclick="ins('*nghiêng*')"><i>I</i></button>
+            <button type="button" class="tb-b" onclick="ins('__gạch chân__')"><u>U</u></button>
             <div class="tb-sep"></div>
             <button type="button" class="tb-b" onclick="ins('\n• ')">• List</button>
             <button type="button" class="tb-b" onclick="ins('\n\n---\n\n')">── Line</button>
+            <div class="tb-sep"></div>
+            <button type="button" class="tb-b" id="wordImportBtn" onclick="document.getElementById('fWordImport').click()">📄 Đính kèm file Word</button>
+            <input type="file" name="word_file" id="fWordImport" accept=".docx" style="display:none" onchange="importWordFile(this)">
+            <span class="tb-word-chip" id="wordFileChip" style="display:none"></span>
+            <div class="tb-sep"></div>
+            <button type="button" class="tb-b" id="contentExpandBtn" onclick="openContentFull()" title="Mở rộng gần toàn màn hình để đọc/sửa dễ hơn">⛶ Mở rộng</button>
+            <button type="button" class="tb-b" id="contentCollapseBtn" onclick="closeContentFull()" style="display:none">✕ Thu nhỏ</button>
             <span class="char-c" id="charC">0 ký tự</span>
           </div>
           <textarea name="noi_dung" id="fContent" placeholder="Viết nội dung ở đây..." required oninput="updC(this)"></textarea>
+          <div class="tb-hint" style="font-size:11.5px;color:var(--b-muted);margin-top:6px">📄 Đính kèm file Word: chọn file .docx, trang blog sẽ <b>nhúng hiển thị đúng file gốc</b> qua Microsoft Office Online Viewer (không đọc/dựng lại bằng JS — dùng chính bộ máy hiển thị của Office nên đúng 100% như mở bằng Word). File tối đa 20MB. <b>Lưu ý:</b> tính năng xem trước này chỉ chạy được khi web đã lên hosting/domain thật — <b>không hoạt động trên localhost/XAMPP</b> vì Microsoft cần tải được file qua internet; lúc test ở localhost, khách vẫn tải file gốc về xem được bình thường.</div>
         </div>
+        <div class="content-zoom-backdrop" id="contentZoomBackdrop" onclick="closeContentFull()"></div>
         <div class="fr2">
           <div class="fg">
             <label>Trạng thái</label>
@@ -644,72 +526,10 @@ include __DIR__ . '/../includes/admin-head.php';
   </div>
 </div>
 
-<script>
-function openEditor(p) {
-  document.getElementById('editorOverlay').classList.add('open');
-  document.body.style.overflow='hidden';
-  if(p){
-    document.getElementById('epBadge').textContent='✏️ Sửa';
-    document.getElementById('epTitle').textContent='Sửa bài viết';
-    document.getElementById('fId').value=p.id;
-    document.getElementById('fTitle').value=p.tieu_de||'';
-    document.getElementById('fContent').value=p.noi_dung||'';
-    document.getElementById('fTag').value=p.tag||'';
-    document.getElementById('fIconD').value=p.icon||'📝';
-    document.getElementById('fIconH').value=p.icon||'📝';
-    document.getElementById('tagIcon').textContent=p.icon||'📝';
-    document.getElementById('fRt').value=p.read_time||5;
-    document.getElementById('fSt').value=p.trang_thai||'nhap';
-    document.getElementById('fColor').value=p.tag_color||'#065E34';
-    hiTag(p.tag);
-    updC(document.getElementById('fContent'));
-  } else {
-    document.getElementById('epBadge').textContent='✍️ Mới';
-    document.getElementById('epTitle').textContent='Viết bài mới';
-    document.getElementById('fId').value='0';
-    document.getElementById('postForm').reset();
-    document.getElementById('fId').value='0';
-    document.getElementById('fIconH').value='📝';
-    document.getElementById('tagIcon').textContent='📝';
-    document.querySelectorAll('.tag-o').forEach(e=>e.classList.remove('sel'));
-    updC(document.getElementById('fContent'));
-  }
-  setTimeout(()=>document.getElementById('fTitle').focus(),100);
-}
-function closeEditor(){
-  document.getElementById('editorOverlay').classList.remove('open');
-  document.body.style.overflow='';
-  document.getElementById('tagDd').classList.remove('open');
-}
-function toggleTagDd(){document.getElementById('tagDd').classList.toggle('open');}
-function selTag(n,i,c){
-  document.getElementById('fTag').value=n;
-  document.getElementById('fIconD').value=i;
-  document.getElementById('fIconH').value=i;
-  document.getElementById('fColor').value=c;
-  document.getElementById('tagIcon').textContent=i;
-  document.getElementById('tagDd').classList.remove('open');
-  hiTag(n);
-}
-function hiTag(n){document.querySelectorAll('.tag-o').forEach(e=>e.classList.toggle('sel',e.textContent.trim().includes(n)));}
-document.addEventListener('click',e=>{
-  const dd=document.getElementById('tagDd');
-  if(dd&&!dd.closest('.tag-pw').contains(e.target))dd.classList.remove('open');
-});
-function ins(t){
-  const ta=document.getElementById('fContent');
-  const s=ta.selectionStart,e=ta.selectionEnd;
-  ta.value=ta.value.slice(0,s)+t+ta.value.slice(e);
-  ta.selectionStart=ta.selectionEnd=s+t.length;
-  ta.focus();updC(ta);
-}
-function updC(ta){
-  const l=ta.value.length,m=Math.max(1,Math.ceil(l/800));
-  document.getElementById('charC').textContent=l.toLocaleString('vi-VN')+' ký · ~'+m+' phút';
-  document.getElementById('fRt').value=m;
-}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeEditor();});
-<?php if($editPost):?>openEditor(<?=json_encode($editPost,JSON_UNESCAPED_UNICODE)?>);<?php endif;?>
-</script>
+<script>window.SITE_URL = "<?= SITE_URL ?>";</script>
+<script src="<?= SITE_URL ?>/assets/js/admin-posts.js"></script>
+<?php if($editPost): ?>
+<script>openEditor(<?= json_encode($editPost, JSON_UNESCAPED_UNICODE) ?><?= $error ? ', '.json_encode($error, JSON_UNESCAPED_UNICODE) : '' ?>);</script>
+<?php endif; ?>
 </body>
 </html>

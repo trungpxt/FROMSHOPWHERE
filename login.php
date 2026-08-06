@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/includes/email_verify.php';
+require_once __DIR__ . '/includes/coupon-lib.php';
+require_once __DIR__ . '/includes/referral.php';
 startSession();
 
 // Đã đăng nhập rồi thì về trang chủ
@@ -8,7 +10,7 @@ if (isLoggedIn()) redirect(SITE_URL . '/index.php');
 
 $error  = '';
 $success = '';
-$mode   = $_GET['mode'] ?? 'login';
+$mode   = $_GET['mode'] ?? (!empty($_GET['ref']) ? 'register' : 'login');
 $redirect = $_GET['redirect'] ?? SITE_URL . '/index.php';
 if (!empty($_GET['pending'])) {
     $success = 'Đăng ký thành công! Kiểm tra Gmail và nhấn link xác nhận để kích hoạt tài khoản.';
@@ -21,6 +23,7 @@ if (!empty($_GET['verified'])) {
 
 /* ══ XỬ LÝ POST ══ */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
     $action = $_POST['action'] ?? '';
 
     /* ── ĐĂNG NHẬP ── */
@@ -97,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                     $ins->execute([':n' => $name, ':e' => $email, ':p' => $hash]);
                     $userId = (int) db()->lastInsertId();
+                    referral_attach($userId, $_POST['ref'] ?? null);
                     if (!sendUserVerificationEmail($userId, $email, $name)) {
                         $error = 'Tài khoản đã tạo nhưng không gửi được email. '
                                . '<a href="resend-verification.php?email=' . urlencode($email) . '" style="color:inherit;font-weight:700">Gửi lại xác nhận</a>.';
@@ -118,46 +122,51 @@ $currentPage = '';
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $mode==='register' ? 'Đăng ký' : 'Đăng nhập' ?> — FROMSHOPWHERE</title>
-<link rel="stylesheet" href="style.css">
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
 </head>
 <body>
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 <?php include __DIR__ . '/includes/nav.php'; ?>
 
 <div class="auth-wrap">
   <div class="auth-card">
 
     <div class="auth-logo" style="text-align:center;margin-bottom:16px">
-      <img src="images/logo.png" alt="FROMSHOPWHERE" style="height:64px;width:auto">
+      <img src="images/ui/logo.png" alt="FROMSHOPWHERE" class="logo-img-light" style="height:64px;width:auto">
+      <img src="images/ui/logo-dark.png" alt="FROMSHOPWHERE" class="logo-img-dark" style="height:64px;width:auto">
     </div>
 
     <!-- Tabs -->
     <div style="display:flex;border-bottom:2px solid var(--border);margin-bottom:24px">
       <a href="login.php" style="flex:1;text-align:center;padding:10px;font-weight:700;font-size:14px;text-decoration:none;
-         border-bottom:<?= $mode==='login' ? '2px solid var(--green-600,#0A8A4C)' : 'none' ?>;margin-bottom:-2px;
-         color:<?= $mode==='login' ? 'var(--green-600,#0A8A4C)' : 'var(--text-muted,#888)' ?>">
+         border-bottom:<?= $mode==='login' ? '2px solid var(--teal-700)' : 'none' ?>;margin-bottom:-2px;
+         color:<?= $mode==='login' ? 'var(--teal-700)' : 'var(--text-muted)' ?>">
         Đăng nhập
       </a>
       <a href="login.php?mode=register" style="flex:1;text-align:center;padding:10px;font-weight:700;font-size:14px;text-decoration:none;
-         border-bottom:<?= $mode==='register' ? '2px solid var(--green-600,#0A8A4C)' : 'none' ?>;margin-bottom:-2px;
-         color:<?= $mode==='register' ? 'var(--green-600,#0A8A4C)' : 'var(--text-muted,#888)' ?>">
+         border-bottom:<?= $mode==='register' ? '2px solid var(--teal-700)' : 'none' ?>;margin-bottom:-2px;
+         color:<?= $mode==='register' ? 'var(--teal-700)' : 'var(--text-muted)' ?>">
         Đăng ký
       </a>
     </div>
 
     <?php if ($success): ?>
-      <div style="background:#D1FAE5;color:#065F46;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;line-height:1.5">
+      <div class="auth-alert auth-alert-ok">
         ✅ <?= e($success) ?>
         <?php if (!empty($_GET['email'])): ?>
           <br><a href="resend-verification.php?email=<?= urlencode($_GET['email']) ?>"
-             style="color:#065F46;font-weight:700;font-size:12px">Gửi lại email xác nhận</a>
+             style="color:var(--teal-700);font-weight:700;font-size:12px">Gửi lại email xác nhận</a>
         <?php endif; ?>
       </div>
     <?php endif; ?>
 
     <?php if ($error): ?>
-      <div class="form-error" style="background:#FEE2E2;color:#991B1B;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;line-height:1.5">
+      <div class="auth-alert auth-alert-err">
         ⚠ <?= $error ?>
       </div>
     <?php endif; ?>
@@ -165,6 +174,7 @@ $currentPage = '';
     <?php if ($mode === 'login'): ?>
     <!-- ĐĂNG NHẬP -->
     <form method="POST" autocomplete="on">
+      <?= csrfField() ?>
       <input type="hidden" name="action" value="login">
       <div class="form-group">
         <label class="form-label">Email</label>
@@ -176,7 +186,7 @@ $currentPage = '';
         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
           Mật khẩu
           <a href="forgot-password.php"
-             style="font-size:12px;font-weight:400;color:var(--green-600,#0A8A4C);text-decoration:none">
+             style="font-size:12px;font-weight:400;color:var(--teal-700);text-decoration:none">
             Quên mật khẩu?
           </a>
         </label>
@@ -191,7 +201,14 @@ $currentPage = '';
     <?php else: ?>
     <!-- ĐĂNG KÝ -->
     <form method="POST" autocomplete="on">
+      <?= csrfField() ?>
       <input type="hidden" name="action" value="register">
+      <input type="hidden" name="ref" value="<?= e($_POST['ref'] ?? $_GET['ref'] ?? '') ?>">
+      <?php if (!empty($_GET['ref']) || !empty($_POST['ref'])): ?>
+      <div style="background:var(--tint-teal,#EAF7F1);color:var(--accent-700,#3B2FA0);padding:10px 14px;border-radius:10px;font-size:12.5px;margin-bottom:14px">
+        🎉 Bạn được bạn bè giới thiệu — đăng ký ngay để cả hai cùng nhận ưu đãi!
+      </div>
+      <?php endif; ?>
       <div class="form-group">
         <label class="form-label">Họ và tên</label>
         <input class="form-input" type="text" name="ho_ten" required
@@ -225,7 +242,7 @@ $currentPage = '';
 <footer>
   <div class="footer-inner">
     <div class="footer-bottom">
-      <p>© 2025 FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
+      <p>© <?= date('Y') ?> FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
       <div class="pay-icons">
         <div class="pay-badge">VISA</div><div class="pay-badge">MC</div>
         <div class="pay-badge">MOMO</div><div class="pay-badge">ZALO</div>
@@ -233,7 +250,7 @@ $currentPage = '';
     </div>
   </div>
 </footer>
-<script src="shared.js"></script>
-<script>document.addEventListener('DOMContentLoaded',()=>{restoreTheme();updateCartBadge();syncCartPanel();})</script>
+<script src="assets/js/shared.js"></script>
+<script src="assets/js/page-init.js"></script>
 </body>
 </html>

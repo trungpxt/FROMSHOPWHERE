@@ -8,7 +8,7 @@ $q     = trim($_GET['q']    ?? '');
 $limit = min((int)($_GET['limit'] ?? 8), 50);
 $sort  = $_GET['sort'] ?? 'newest';
 
-$where  = ["p.trang_thai = 'hien'"];
+$where  = ["p.trang_thai != 'an'"];
 $params = [];
 
 if ($ten)  { $where[] = 'c.ten_danh_muc = :ten';  $params[':ten']  = $ten; }
@@ -35,5 +35,6 @@ try {
 
     echo json_encode(['data' => $products, 'total' => (int)$cs->fetchColumn()], JSON_UNESCAPED_UNICODE);
 } catch (Exception $e) {
-    echo json_encode(['data' => [], 'total' => 0, 'error' => $e->getMessage()]);
+    error_log('api/products.php error: ' . $e->getMessage());
+    echo json_encode(['data' => [], 'total' => 0, 'error' => 'Không tải được danh sách sản phẩm.']);
 }

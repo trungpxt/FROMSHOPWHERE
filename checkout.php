@@ -11,123 +11,28 @@ $_user = currentUser();
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Đặt hàng — FROMSHOPWHERE</title>
-<link rel="stylesheet" href="style.css">
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
 </head>
 <body>
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 
-<?php
-/* ── inline nav ── */
-if (!defined('SITE_URL')) require_once __DIR__ . '/config.php';
-startSession();
-$_user        = currentUser();
-$_currentPage = $currentPage ?? '';
-?>
-<!-- ── TOAST ── -->
-<div class="toast" id="toast"></div>
+<?php include __DIR__ . '/includes/nav.php'; ?>
 
-<!-- ── CART OVERLAY ── -->
-<div class="cart-overlay" id="cartOverlay" onclick="closeCartOnBackdrop(event)">
-  <div class="cart-panel">
-    <div class="cart-header">
-      <h3>Giỏ hàng</h3>
-      <button class="close-btn" onclick="toggleCart()">✕</button>
-    </div>
-    <div class="cart-items" id="cartItems">
-      <div style="text-align:center;padding:48px 0">
-        <div style="font-size:40px;margin-bottom:12px">🛒</div>
-        <p style="color:var(--text-muted);font-size:14px">Giỏ hàng trống</p>
-      </div>
-    </div>
-    <div class="cart-footer">
-      <div class="cart-total">
-        <span class="ct-label">Tổng cộng</span>
-        <span class="ct-value" id="cartTotal">0đ</span>
-      </div>
-      <button class="btn-checkout" onclick="window.location.href='<?= SITE_URL ?>/checkout.php'">Tiến hành thanh toán →</button>
-    </div>
-  </div>
-</div>
 
-<!-- ══ NAV ══ -->
-<nav>
-  <div class="nav-inner">
-    <a class="logo" href="<?= SITE_URL ?>/index.php">
-      <img src="<?= SITE_URL ?>/images/logo.png" alt="FROMSHOPWHERE"
-           style="height:44px;width:auto;object-fit:contain;filter:drop-shadow(0 0 6px rgba(0,0,0,.3))">
-    </a>
-
-    <ul class="nav-links">
-      <li><a href="<?= SITE_URL ?>/index.php"    <?= $_currentPage==='home'     ?'class="active"':'' ?>>Trang chủ</a></li>
-      <li><a href="<?= SITE_URL ?>/products.php" <?= $_currentPage==='products' ?'class="active"':'' ?>>Sản phẩm</a></li>
-      <li><a href="<?= SITE_URL ?>/blog.php"     <?= $_currentPage==='blog'     ?'class="active"':'' ?>>Blog</a></li>
-      <li><a href="<?= SITE_URL ?>/contact.php"  <?= $_currentPage==='contact'  ?'class="active"':'' ?>>Liên hệ</a></li>
-    </ul>
-
-    <div class="nav-right">
-      <div class="search-wrap">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <input class="search-box" type="search" placeholder="Tìm phần mềm..."
-               onkeydown="if(event.key==='Enter')window.location.href='<?= SITE_URL ?>/products.php?q='+encodeURIComponent(this.value)">
-      </div>
-
-      <button class="theme-toggle" onclick="toggleTheme()" title="Chuyển sáng/tối" aria-label="Theme">
-        <div class="theme-knob" id="themeKnob">☀️</div>
-      </button>
-
-      <div class="cart-btn" onclick="toggleCart()">
-        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 01-8 0"/>
-        </svg>
-        <span class="cart-badge" id="cartCount">0</span>
-      </div>
-
-      <?php if ($_user): ?>
-        <div style="position:relative">
-          <button class="btn-login"
-                  onclick="document.getElementById('userMenu').classList.toggle('open')"
-                  style="cursor:pointer;display:flex;align-items:center;gap:6px">
-            <span style="font-size:16px">👤</span>
-            <?= e($_user['ho_ten']) ?> <span style="font-size:10px;opacity:.7">▾</span>
-          </button>
-          <div id="userMenu" class="user-dropdown">
-            <?php if (isAdmin()): ?>
-            <a href="<?= SITE_URL ?>/admin/">⚙️ Quản trị Admin</a>
-            <?php endif; ?>
-            <a href="<?= SITE_URL ?>/profile.php">👤 Tài khoản</a>
-            <a href="<?= SITE_URL ?>/logout.php">🚪 Đăng xuất</a>
-          </div>
-        </div>
-      <?php else: ?>
-        <a class="btn-login" href="<?= SITE_URL ?>/login.php">Đăng nhập</a>
-      <?php endif; ?>
-    </div>
-  </div>
-</nav>
-
-<style>
-.user-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:300;display:none;flex-direction:column;gap:2px}
-.user-dropdown.open{display:flex}
-.user-dropdown a{padding:9px 13px;border-radius:8px;text-decoration:none;color:var(--text);font-size:13px;font-weight:500;transition:background .12s}
-.user-dropdown a:hover{background:var(--bg-alt);color:var(--green-600,#0A8A4C)}
-</style>
-<script>
-document.addEventListener('click', e => {
-  const m = document.getElementById('userMenu');
-  if (m && !m.parentElement.contains(e.target)) m.classList.remove('open');
-});
-</script>
+<link rel="stylesheet" href="assets/css/checkout.css">
+<script src="assets/js/checkout.js"></script>
 
 <!-- ══════════════════════════════════════ -->
 <!--  PAGE HEADER                          -->
 <!-- ══════════════════════════════════════ -->
 <div class="page-header">
   <div class="page-header-inner">
+    <div class="ph-eyebrow"><span class="mini-seal mini-seal-light">🔒 Thanh toán an toàn</span></div>
     <h1>Đặt hàng</h1>
     <p>Điền thông tin để nhận license key qua email</p>
   </div>
@@ -177,25 +82,38 @@ document.addEventListener('click', e => {
 
       <div class="checkout-box">
         <h3>Phương thức thanh toán</h3>
-        <div class="pay-option selected" onclick="selectPayment(this)">
-          <input type="radio" name="pay" checked> 🏦 Chuyển khoản ngân hàng
+        <div class="pay-option selected" data-method="VNPay" onclick="selectPayment(this)"
+             style="border-color:var(--teal-700);background:var(--teal-50)">
+          <input type="radio" name="pay" value="VNPay" checked>
+          <div style="display:flex;align-items:center;gap:10px;flex:1">
+            <span style="font-size:22px">💳</span>
+            <div>
+              <div style="font-weight:700;font-size:14px">VNPay</div>
+              <div style="font-size:12px;color:var(--text-muted)">ATM · Visa · Mastercard · QR Code</div>
+            </div>
+            <span style="background:var(--teal-700);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:auto;white-space:nowrap">Khuyến nghị</span>
+          </div>
         </div>
-        <div class="pay-option" onclick="selectPayment(this)">
-          <input type="radio" name="pay"> 📱 MoMo / ZaloPay
-        </div>
-        <div class="pay-option" onclick="selectPayment(this)">
-          <input type="radio" name="pay"> 💳 Thẻ Visa / Mastercard
+        <div class="pay-option" data-method="Chuyển khoản ngân hàng" onclick="selectPayment(this)">
+          <input type="radio" name="pay" value="Chuyen khoan">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:22px">🏦</span>
+            <div>
+              <div style="font-weight:700;font-size:14px">Chuyển khoản ngân hàng</div>
+              <div style="font-size:12px;color:var(--text-muted)">Quét mã QR sau khi đặt hàng</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Right: Summary -->
-    <div class="checkout-box" style="position:sticky;top:80px">
+    <div class="checkout-box checkout-summary-sticky">
       <h3>Tóm tắt đơn hàng</h3>
       <div id="checkoutItems" style="margin-bottom:14px"></div>
 
       <div class="order-line"><span class="lbl">Tạm tính</span><span class="val" id="checkoutSub">0đ</span></div>
-      <div class="order-line"><span class="lbl">Giảm giá</span><span class="val" id="checkoutDiscount" style="color:#A32D2D">−0đ</span></div>
+      <div class="order-line"><span class="lbl">Giảm giá</span><span class="val" id="checkoutDiscount" style="color:#B0242B">−0đ</span></div>
       <div class="order-line total">
         <span class="lbl">Tổng cộng</span>
         <span class="val" id="checkoutTotal">0đ</span>
@@ -206,7 +124,7 @@ document.addEventListener('click', e => {
         <button class="btn-apply" onclick="applyCoupon()">Áp dụng</button>
       </div>
 
-      <button class="btn-checkout" onclick="showQR()">Đặt hàng ngay →</button>
+      <button class="btn-checkout" id="checkoutBtn" onclick="handleCheckout()">Đặt hàng ngay →</button>
 
       <p style="text-align:center;margin-top:12px;font-size:13px">
         <a href="products.php" style="color:var(--teal-700)">← Tiếp tục mua sắm</a>
@@ -222,7 +140,7 @@ document.addEventListener('click', e => {
 <footer>
   <div class="footer-inner">
     <div class="footer-bottom">
-      <p>© 2025 FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
+      <p>© <?= date('Y') ?> FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
       <div class="pay-icons">
         <div class="pay-badge">VISA</div>
         <div class="pay-badge">MC</div>
@@ -234,296 +152,38 @@ document.addEventListener('click', e => {
   </div>
 </footer>
 
-<script src="shared.js"></script>
-<script>
-  function selectPayment(el) {
-    document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
-    el.classList.add('selected');
-    el.querySelector('input[type=radio]').checked = true;
-  }
-  let couponApplied = false;
 
-const COUPONS = {
-  FIRST15: { percent: 15, label: 'Giảm 15% đơn đầu' }
-  // thêm mã khác: SAVE10: { percent: 10, label: '...' }
-};
-function getSubtotal() {
-  return getCart().reduce((s, i) => s + i.price * i.qty, 0);
-}
-
-function getDiscountAmount() {
-  if (!couponApplied) return 0;
-  const code = document.getElementById('couponInput')?.value.trim().toUpperCase();
-  const c = COUPONS[code];
-  if (!c) return 0;
-  return Math.round(getSubtotal() * c.percent / 100);
-}
-
-function getFinalTotal() {
-  return getSubtotal() - getDiscountAmount();
-}
-
-function recalcCheckoutTotals() {
-  const sub = getSubtotal();
-  const disc = getDiscountAmount();
-  const final = sub - disc;
-
-  const subEl = document.getElementById('checkoutSub');
-  const discEl = document.getElementById('checkoutDiscount');
-  const totEl = document.getElementById('checkoutTotal');
-
-  if (subEl) subEl.textContent = fmt(sub);
-  if (discEl) discEl.textContent = disc > 0 ? '−' + fmt(disc) : '−0đ';
-  if (totEl) totEl.textContent = fmt(final);
-}
-
-function applyCoupon() {
-  const code = document.getElementById('couponInput').value.trim().toUpperCase();
-  if (!code) {
-    showToast('⚠ Nhập mã giảm giá');
-    return;
-  }
-  if (COUPONS[code]) {
-    couponApplied = true;
-    recalcCheckoutTotals();
-    showToast('✓ Áp dụng mã ' + code + ' — giảm ' + COUPONS[code].percent + '%');
-  } else {
-    couponApplied = false;
-    recalcCheckoutTotals();
-    showToast('⚠ Mã giảm giá không hợp lệ!');
-  }
-}
-
-  function placeOrder() {
-    const name  = document.getElementById('ckName').value.trim();
-    const email = document.getElementById('ckEmail').value.trim();
-    const phone = document.getElementById('ckPhone').value.trim();
-    const cart  = getCart();
-
-    if (cart.length === 0) {
-      showToast('⚠ Giỏ hàng đang trống!');
-      return;
-    }
-    const err = validateCheckoutForm();
-    if (err) {
-      showToast('⚠ ' + err);
-      document.getElementById('ckEmail')?.reportValidity();
-      document.getElementById('ckPhone')?.reportValidity();
-      return;
-    }
-    showToast('🎉 Đặt hàng thành công! License key sẽ gửi qua email.');
-    localStorage.removeItem('fsw-cart');
-    setTimeout(() => { window.location.href = 'index.php'; }, 1800);
-  }
-
-function syncCheckoutPage() {
-  const cart  = getCart();
-  const el    = document.getElementById('checkoutItems');
-
-  if (cart.length === 0) {
-    el.innerHTML = `<p style="font-size:13px;color:var(--text-muted)">Chưa có sản phẩm. <a href="products.php" style="color:var(--teal-700)">Mua ngay →</a></p>`;
-  } else {
-    el.innerHTML = cart.map(i => `
-      <div class="order-line">
-        <span class="lbl">${i.name} ×${i.qty}</span>
-        <span class="val" style="font-weight:600;color:var(--teal-700)">${fmt(i.price * i.qty)}</span>
-      </div>`).join('');
-  }
-  recalcCheckoutTotals();
-}
-
-  document.addEventListener('DOMContentLoaded', () => {
-    restoreTheme();
-    updateLoginBtn();
-    syncCheckoutPage();
-    initCheckoutFieldValidation();
-  });
-</script>
-
-<!-- ══ QR PAYMENT MODAL ══ -->
-<div id="qrModal" style="
-    display:none; position:fixed; inset:0; z-index:500;
-    background:rgba(0,0,0,.65); backdrop-filter:blur(6px);
-    align-items:center; justify-content:center; padding:20px;">
-  <div style="
-      background:var(--card-bg); border-radius:20px;
-      padding:32px; width:min(380px,100%);
-      text-align:center; position:relative;
-      box-shadow:0 24px 80px rgba(0,0,0,.35);
-      border:1px solid var(--border);
-      animation:qrFadeIn .3s cubic-bezier(.22,1,.36,1);">
-
-    <!-- Close -->
-    <button onclick="closeQR()" style="
-        position:absolute; top:14px; right:14px;
-        width:30px; height:30px; border:none;
-        background:var(--bg-alt); border-radius:8px;
-        cursor:pointer; font-size:16px; color:var(--text-muted);
-        display:flex; align-items:center; justify-content:center;">✕</button>
-
-    <!-- Header -->
-    <div style="font-size:28px; margin-bottom:6px">💳</div>
-    <h3 style="font-size:18px; font-weight:800; margin-bottom:4px; color:var(--text)">Quét mã để thanh toán</h3>
-    <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px">
-      Sử dụng MoMo, ZaloPay, VietQR hoặc Internet Banking
-    </p>
-
-    <!-- QR Image -->
-    <div style="
-        background:#fff; border-radius:14px;
-        padding:16px; display:inline-block;
-        box-shadow:0 4px 20px rgba(0,0,0,.1);
-        margin-bottom:18px;">
-      <img src="qr-payment.jpg" alt="QR Payment"
-           style="width:220px; height:220px; object-fit:contain; display:block;">
-    </div>
-
-    <!-- Amount -->
-    <div id="qrAmount" style="
-        font-size:22px; font-weight:800;
-        color:var(--teal-700); margin-bottom:6px;
-        font-family:var(--font-display,'Syne',sans-serif)"></div>
-    <p style="font-size:12px; color:var(--text-muted); margin-bottom:20px">
-      ⚡ Sau khi chuyển khoản, nhấn xác nhận bên dưới
-    </p>
-
-    <!-- Confirm button -->
-    <button onclick="confirmPayment()" style="
-        width:100%; padding:13px;
-        background:linear-gradient(135deg,var(--teal-700,#0B4220),var(--teal-900,#041409));
-        color:#fff; border:none; border-radius:10px;
-        font-size:15px; font-weight:700; cursor:pointer;
-        font-family:inherit; transition:transform .2s, box-shadow .2s;
-        margin-bottom:10px;"
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(11,66,32,.4)'"
-        onmouseout="this.style.transform='';this.style.boxShadow=''">
-      ✅ Đã chuyển khoản xong
-    </button>
-    <button onclick="closeQR()" style="
-        width:100%; padding:11px;
-        background:none; border:1.5px solid var(--border);
-        border-radius:10px; font-size:13px; font-weight:600;
-        cursor:pointer; color:var(--text-muted); font-family:inherit;">
-      Quay lại
-    </button>
+<!-- ══ VNPAY CHECKOUT SCRIPT ══ -->
+<div id="loadingModal" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);align-items:center;justify-content:center">
+  <div style="background:var(--card-bg,#fff);border-radius:20px;padding:40px 32px;text-align:center;min-width:280px;box-shadow:0 24px 80px rgba(0,0,0,.3)">
+    <div style="font-size:48px;margin-bottom:14px">🔄</div>
+    <div style="font-size:16px;font-weight:700;color:var(--text,#1A1A18);margin-bottom:8px">Đang chuyển đến VNPay...</div>
+    <div style="font-size:13px;color:var(--text-muted,#6B7F6E)">Vui lòng không đóng trang này</div>
+    <div style="margin-top:20px;width:40px;height:40px;border:3px solid rgba(240,73,35,.2);border-top-color:var(--teal-500);border-radius:50%;animation:spin .8s linear infinite;margin:20px auto 0"></div>
   </div>
 </div>
 
-<style>
-@keyframes qrFadeIn {
-  from { transform:scale(.9) translateY(20px); opacity:0 }
-  to   { transform:scale(1)  translateY(0);    opacity:1 }
-}
-</style>
+
+<!-- QR Modal (cho phương thức chuyển khoản) -->
+<div id="qrModal">
+  <div class="qr-box">
+    <button onclick="closeQR()" class="qr-close-btn">✕</button>
+    <div class="qr-icon">💳</div>
+    <h3 class="qr-title">Quét mã để thanh toán</h3>
+    <p class="qr-desc">Sử dụng MoMo, ZaloPay, VietQR hoặc Internet Banking</p>
+    <div class="qr-image-wrap">
+      <img src="images/ui/qr-payment.jpg" alt="QR Payment" class="qr-image">
+    </div>
+    <div id="qrAmount" class="qr-amount"></div>
+    <p class="qr-hint">⚡ Sau khi chuyển khoản, nhấn xác nhận bên dưới</p>
+    <button onclick="confirmPayment()" class="qr-confirm-btn">
+      ✅ Đã chuyển khoản xong
+    </button>
+    <button onclick="closeQR()" class="qr-back-btn">Quay lại</button>
+  </div>
+</div>
 
 
-<script>
-const PLACE_ORDER_URL = 'api/place-order.php';
-
-function getSelectedPaymentLabel() {
-  const sel = document.querySelector('.pay-option.selected');
-  if (!sel) return 'Chuyển khoản ngân hàng';
-  return sel.textContent.trim();
-}
-
-function getCheckoutPayload() {
-  const code = couponApplied
-    ? document.getElementById('couponInput').value.trim().toUpperCase()
-    : null;
-  return {
-    items: getCart().map(i => ({ id: i.id, qty: i.qty, price: i.price })),
-    phuong_thuc_tt: getSelectedPaymentLabel(),
-    ma_giam_gia: code && COUPONS[code] ? code : null
-  };
-}
-
-function showQR() {
-  const items = getCart();
-  if (items.length === 0) {
-    showToast('⚠ Giỏ hàng đang trống!');
-    return;
-  }
-
-  const err = validateCheckoutForm();
-  if (err) {
-    showToast('⚠ ' + err);
-    document.getElementById('ckEmail')?.reportValidity();
-    document.getElementById('ckPhone')?.reportValidity();
-    return;
-  }
-
-  const finalTotal = getFinalTotal();
-  document.getElementById('qrAmount').textContent = finalTotal.toLocaleString('vi-VN') + 'đ';
-
-  document.getElementById('qrModal').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
-function closeQR() {
-  document.getElementById('qrModal').style.display = 'none';
-  document.body.style.overflow = '';
-}
-
-async function confirmPayment() {
-  const cart = getCart();
-  if (cart.length === 0) {
-    showToast('⚠ Giỏ hàng đang trống!');
-    return;
-  }
-  const err = validateCheckoutForm();
-  if (err) {
-    showToast('⚠ ' + err);
-    document.getElementById('ckEmail')?.reportValidity();
-    document.getElementById('ckPhone')?.reportValidity();
-    return;
-  }
-  const btn = document.querySelector('#qrModal button[onclick="confirmPayment()"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Đang lưu đơn...'; }
-  try {
-    const res = await fetch(PLACE_ORDER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(getCheckoutPayload())
-    });
-    const data = await res.json();
-
-    if (res.status === 401) {
-      showToast('⚠ Vui lòng đăng nhập để lưu đơn hàng');
-      setTimeout(() => {
-        window.location.href = 'login.php?redirect=' + encodeURIComponent('checkout.php');
-      }, 1500);
-      return;
-    }
-
-    if (!data.ok) {
-      showToast('⚠ ' + (data.error || 'Không lưu được đơn hàng'));
-      return;
-    }
-
-    localStorage.removeItem('fsw-cart');
-    closeQR();
-    showToast('🎉 Đặt hàng thành công! Mã đơn #' + data.order_id);
-    setTimeout(() => {
-      window.location.href = 'profile.php?tab=orders';
-    }, 1500);
-
-  } catch (err) {
-    showToast('⚠ Lỗi kết nối server');
-    console.error(err);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✅ Đã chuyển khoản xong'; }
-  }
-}
-
-document.getElementById('qrModal').addEventListener('click', function(e) {
-  if (e.target === this) closeQR();
-});
-
-// Đóng modal khi click nền
-document.getElementById('qrModal').addEventListener('click', function(e) {
-    if (e.target === this) closeQR();
-});
-</script>
 
 </body>
 </html>

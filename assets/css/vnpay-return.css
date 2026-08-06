@@ -1,0 +1,18 @@
+.result-wrap{max-width:520px;margin:60px auto;padding:24px;text-align:center}
+.result-card{background:var(--card-bg,#fff);border:1.5px solid var(--border,#DEDAF2);border-radius:20px;padding:40px 32px;box-shadow:0 8px 40px rgba(0,0,0,.08)}
+.result-icon{font-size:64px;margin-bottom:16px;display:block}
+.result-title{font-size:24px;font-weight:800;margin:0 0 10px;color:var(--text,#17143A)}
+.result-msg{font-size:14px;color:var(--text-muted,#5B5680);line-height:1.7;margin:0 0 24px}
+.result-info{background:var(--bg,#F6F5FB);border-radius:12px;padding:16px;margin:0 0 24px;text-align:left;font-size:13px}
+.result-info div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border,#DEDAF2)}
+.result-info div:last-child{border-bottom:none;font-weight:700}
+.btn-home{display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--accent-600,#4A3EC0);color:#fff;border-radius:11px;font-size:15px;font-weight:800;text-decoration:none;transition:all .2s;margin:4px}
+.btn-home:hover{background:var(--accent-700,#3B2FA0);transform:translateY(-2px);box-shadow:0 8px 24px rgba(var(--accent-rgb, 59, 47, 160),.3)}
+.btn-retry{display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:transparent;color:var(--text-muted,#5B5680);border:1.5px solid var(--border,#DEDAF2);border-radius:11px;font-size:14px;font-weight:600;text-decoration:none;transition:all .2s;margin:4px}
+.btn-retry:hover{border-color:var(--accent-600,#4A3EC0);color:var(--accent-600,#4A3EC0)}
+
+/* ── DARK THEME MỚI ── */
+body.dark .vnpay-wrap { background: transparent; }
+body.dark .vnpay-card { background: #15132E; border: 1px solid rgba(255,255,255,.07); }
+body.dark .vnpay-title { color: #fff; }
+body.dark .vnpay-sub { color: #C4BFE8; }

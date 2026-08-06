@@ -4,15 +4,44 @@ requireAdmin();
 
 try {
   $total_orders   = (int)db()->query("SELECT COUNT(*) FROM orders")->fetchColumn();
-  $total_users    = (int)db()->query("SELECT COUNT(*) FROM users WHERE vai_tro='khach'")->fetchColumn();
+  $total_users    = (int)db()->query("SELECT COUNT(*) FROM users WHERE vai_tro='khach_hang'")->fetchColumn();
   $total_products = (int)db()->query("SELECT COUNT(*) FROM products WHERE trang_thai='hien'")->fetchColumn();
   $total_posts    = (int)db()->query("SELECT COUNT(*) FROM posts WHERE trang_thai='da_dang'")->fetchColumn();
   $revenue        = (float)db()->query("SELECT COALESCE(SUM(tong_tien),0) FROM orders WHERE trang_thai IN ('da_thanh_toan','hoan_thanh')")->fetchColumn();
   $pending        = (int)db()->query("SELECT COUNT(*) FROM orders WHERE trang_thai='cho_xu_ly'")->fetchColumn();
   $recent_orders  = db()->query("SELECT o.*,u.ho_ten,u.email FROM orders o JOIN users u ON u.id=o.nguoi_dung_id ORDER BY o.ngay_dat DESC LIMIT 8")->fetchAll();
   $recent_users   = db()->query("SELECT * FROM users ORDER BY ngay_tao DESC LIMIT 5")->fetchAll();
+
+  /* Doanh thu 14 ngày gần nhất (đơn đã thanh toán/hoàn thành) */
+  $revByDayRaw = db()->query(
+    "SELECT DATE(ngay_dat) AS d, SUM(tong_tien) AS total
+     FROM orders
+     WHERE trang_thai IN ('da_thanh_toan','hoan_thanh')
+       AND ngay_dat >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)
+     GROUP BY DATE(ngay_dat)"
+  )->fetchAll(PDO::FETCH_KEY_PAIR);
+  $revenueByDay = [];
+  for ($i = 13; $i >= 0; $i--) {
+    $d = date('Y-m-d', strtotime("-$i day"));
+    $revenueByDay[$d] = (float)($revByDayRaw[$d] ?? 0);
+  }
+
+  /* Top 5 sản phẩm bán chạy nhất (theo số lượng, chỉ tính đơn đã thanh toán/hoàn thành) */
+  $topProducts = db()->query(
+    "SELECT p.id, p.ten_san_pham, p.hinh_anh,
+            SUM(oi.so_luong) AS sold_qty,
+            SUM(oi.so_luong * oi.don_gia) AS sold_revenue
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.don_hang_id
+     JOIN products p ON p.id = oi.san_pham_id
+     WHERE o.trang_thai IN ('da_thanh_toan','hoan_thanh')
+     GROUP BY p.id
+     ORDER BY sold_qty DESC
+     LIMIT 5"
+  )->fetchAll();
 } catch(Exception $e) {
   $total_orders=0;$total_users=0;$total_products=0;$total_posts=0;$revenue=0;$pending=0;$recent_orders=[];$recent_users=[];
+  $revenueByDay=[];$topProducts=[];
 }
 
 $admPageTitle = 'Dashboard — Admin FSW';
@@ -65,6 +94,86 @@ include __DIR__ . '/../includes/admin-head.php';
             <div class="stat-lbl">Sản phẩm</div>
           </div>
         </div>
+      </div>
+
+      <!-- REVENUE CHART + TOP PRODUCTS -->
+      <div class="adm-dash-grid" style="margin-bottom:24px">
+
+        <div class="table-card" style="padding:18px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <span style="font-size:14px;font-weight:800">📈 Doanh thu 14 ngày gần nhất</span>
+            <span style="font-size:12px;color:var(--text-muted2,#94a3b8)">Đơn đã thanh toán / hoàn thành</span>
+          </div>
+          <?php
+            $chartW = 640; $chartH = 200; $padL = 44; $padB = 26; $padT = 10;
+            $plotW = $chartW - $padL - 10;
+            $plotH = $chartH - $padT - $padB;
+            $maxRev = max(1, max($revenueByDay ?: [0]));
+            $days = array_keys($revenueByDay);
+            $n = max(1, count($days) - 1);
+            $points = [];
+            foreach (array_values($revenueByDay) as $i => $v) {
+                $x = $padL + ($n > 0 ? ($i / $n) * $plotW : 0);
+                $y = $padT + $plotH - ($v / $maxRev) * $plotH;
+                $points[] = [$x, $y];
+            }
+            $linePath = '';
+            foreach ($points as $i => [$x, $y]) { $linePath .= ($i === 0 ? "M $x $y" : " L $x $y"); }
+            $areaPath = $linePath;
+            if ($points) {
+                [$lastX] = end($points); [$firstX] = $points[0];
+                $areaPath .= " L $lastX " . ($padT + $plotH) . " L $firstX " . ($padT + $plotH) . " Z";
+            }
+          ?>
+          <?php if ($maxRev <= 1): ?>
+            <div class="table-empty" style="padding:40px 0"><span class="te-icon">📈</span>Chưa có dữ liệu doanh thu trong 14 ngày qua.</div>
+          <?php else: ?>
+          <svg viewBox="0 0 <?= $chartW ?> <?= $chartH ?>" style="width:100%;height:auto;overflow:visible">
+            <?php for ($g = 0; $g <= 3; $g++):
+                $gy = $padT + $plotH - ($g / 3) * $plotH;
+                $gv = round($maxRev * $g / 3);
+            ?>
+              <line x1="<?= $padL ?>" y1="<?= $gy ?>" x2="<?= $chartW - 10 ?>" y2="<?= $gy ?>" stroke="var(--bg-2, #e5e7eb)" stroke-width="1"/>
+              <text x="0" y="<?= $gy + 4 ?>" font-size="9" fill="var(--text-muted2, #94a3b8)"><?= $gv >= 1000000 ? round($gv/1000000,1).'tr' : ($gv >= 1000 ? round($gv/1000).'k' : $gv) ?></text>
+            <?php endfor; ?>
+            <path d="<?= $areaPath ?>" fill="var(--green, #16a34a)" opacity="0.12"/>
+            <path d="<?= $linePath ?>" fill="none" stroke="var(--green, #16a34a)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+            <?php foreach ($points as $i => [$x, $y]):
+                $label = date('d/m', strtotime($days[$i]));
+                $val = $revenueByDay[$days[$i]];
+            ?>
+              <circle cx="<?= $x ?>" cy="<?= $y ?>" r="3" fill="var(--green, #16a34a)">
+                <title><?= $label ?>: <?= fmtVND($val) ?></title>
+              </circle>
+              <?php if ($i % 2 === 0 || $i === count($points) - 1): ?>
+              <text x="<?= $x ?>" y="<?= $chartH - 6 ?>" font-size="9" fill="var(--text-muted2, #94a3b8)" text-anchor="middle"><?= $label ?></text>
+              <?php endif; ?>
+            <?php endforeach; ?>
+          </svg>
+          <?php endif; ?>
+        </div>
+
+        <div class="table-card" style="padding:16px">
+          <div style="font-size:13px;font-weight:800;margin-bottom:12px">🏆 Top sản phẩm bán chạy</div>
+          <?php if (empty($topProducts)): ?>
+            <div class="table-empty" style="padding:20px 0"><span class="te-icon">🏆</span>Chưa có dữ liệu.</div>
+          <?php else: ?>
+            <?php foreach ($topProducts as $i => $tp):
+              $imgPath = $tp['hinh_anh'] ?? '';
+              $imgUrl  = $imgPath === '' ? SITE_URL.'/images/ui/default.jpg' : SITE_URL.'/images/'.ltrim(str_contains($imgPath,'/') ? $imgPath : 'products/'.$imgPath, '/');
+            ?>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bg-2)">
+              <span style="font-weight:800;font-size:12px;color:var(--text-muted2,#94a3b8);width:16px">#<?= $i+1 ?></span>
+              <img src="<?= e($imgUrl) ?>" alt="" width="34" height="34" style="border-radius:8px;object-fit:cover;background:var(--bg-2,#f1f5f9)" onerror="this.src='<?= SITE_URL ?>/images/ui/default.jpg'">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= e($tp['ten_san_pham']) ?></div>
+                <div class="mono text-muted2" style="font-size:11px"><?= (int)$tp['sold_qty'] ?> đã bán · <?= fmtVND((float)$tp['sold_revenue']) ?></div>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </div>
+
       </div>
 
       <!-- TWO COLUMN -->

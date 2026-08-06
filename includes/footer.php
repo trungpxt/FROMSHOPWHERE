@@ -7,7 +7,8 @@ if (!defined('SITE_URL')) require_once __DIR__ . '/../config.php';
         <div class="footer-grid">
             <div class="footer-brand">
                 <div class="footer-logo-wrap">
-                    <img src="images/logo.png" alt="FROMSHOPWHERE" class="logo-img-footer">
+                    <img src="images/ui/logo.png" alt="FROMSHOPWHERE" class="logo-img-footer logo-img-light">
+                    <img src="images/ui/logo-dark.png" alt="FROMSHOPWHERE" class="logo-img-footer logo-img-dark">
                 </div>
                 <p>Nền tảng mua bán phần mềm bản quyền uy tín hàng đầu Việt Nam. Cam kết giá tốt, giao hàng nhanh và hỗ trợ tận tâm.</p>
                 <div class="social-links">
@@ -31,18 +32,19 @@ if (!defined('SITE_URL')) require_once __DIR__ . '/../config.php';
                 <h4>Hỗ trợ</h4>
                 <ul>
                     <li><a href="blog.php">Hướng dẫn cài đặt</a></li>
-                    <li><a href="contact.php">Câu hỏi thường gặp</a></li>
-                    <li><a href="contact.php">Chính sách đổi trả</a></li>
+                    <li><a href="faq.php">Câu hỏi thường gặp</a></li>
+                    <li><a href="terms.php#doi-tra">Chính sách đổi trả</a></li>
                     <li><a href="contact.php">Liên hệ hỗ trợ</a></li>
                 </ul>
             </div>
             <div class="footer-col">
                 <h4>Công ty</h4>
                 <ul>
-                    <li><a href="#">Giới thiệu</a></li>
+                    <li><a href="about.php">Giới thiệu</a></li>
                     <li><a href="blog.php">Blog</a></li>
                     <li><a href="contact.php">Hợp tác</a></li>
-                    <li><a href="#">Điều khoản dịch vụ</a></li>
+                    <li><a href="privacy.php">Chính sách bảo mật</a></li>
+                    <li><a href="terms.php">Điều khoản dịch vụ</a></li>
                 </ul>
             </div>
         </div>

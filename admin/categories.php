@@ -4,6 +4,7 @@ requireAdmin();
 
 $msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
   $a = $_POST['action'] ?? '';
   if ($a === 'save') {
     $id   = (int)($_POST['id'] ?? 0);
@@ -35,16 +36,19 @@ include __DIR__ . '/../includes/admin-head.php';
 <div class="adm">
   <?php include __DIR__ . '/sidebar.php'; ?>
   <main class="adm-main">
-    <div class="adm-topbar">
+    <button onclick="document.querySelector('.adm-side').classList.toggle('open');document.querySelector('.adm-side-backdrop').classList.toggle('open')" class="adm-hamburger" aria-label="Mở menu" title="Menu">☰</button>
+      <div class="adm-topbar">
       <div class="adm-breadcrumb">Admin <span class="sep">/</span> <strong>Danh mục</strong></div>
       <div class="adm-topbar-right">
-        <a href="<?= admThemeToggleUrl() ?>" class="adm-theme-btn" title="Đổi giao diện sáng/tối"><?= admThemeIcon() ?></a>
+        <button onclick="toggleTheme()" class="adm-theme-btn" title="Đổi giao diện sáng/tối" id="admThemeBtn">☀️</button>
+        <a href="<?= SITE_URL ?>/index.php" class="btn btn-secondary">🌐 Xem website</a>
         <button class="btn btn-primary" onclick="openForm()">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="1" x2="8" y2="15"/><line x1="1" y1="8" x2="15" y2="8"/></svg>
           Thêm danh mục
         </button>
       </div>
     </div>
+    <div class="adm-side-backdrop" onclick="document.querySelector('.adm-side').classList.remove('open');this.classList.remove('open')"></div>
     <div class="adm-content">
       <?php if($msg): ?><div class="adm-alert adm-alert-ok">✓ <?= e($msg) ?></div><?php endif; ?>
 
@@ -57,6 +61,7 @@ include __DIR__ . '/../includes/admin-head.php';
             <button type="button" onclick="resetF()" style="font-size:20px;background:none;border:none;cursor:pointer;color:var(--ink-4);line-height:1">×</button>
           </div>
           <form method="POST" id="catForm">
+          <?= csrfField() ?>
             <input type="hidden" name="action" value="save">
             <input type="hidden" name="id" id="fId" value="0">
             <div class="fg">
@@ -107,6 +112,7 @@ include __DIR__ . '/../includes/admin-head.php';
                     <button class="act-btn ab-edit" title="Sửa"
                       onclick='editC(<?= json_encode($c, JSON_UNESCAPED_UNICODE) ?>)'>✏️</button>
                     <form method="POST" style="display:contents" onsubmit="return confirm('Xoá danh mục «<?= e($c['ten_danh_muc']) ?>»?')">
+          <?= csrfField() ?>
                       <input type="hidden" name="action" value="delete">
                       <input type="hidden" name="id" value="<?= $c['id'] ?>">
                       <button class="act-btn ab-del" type="submit" title="Xoá">🗑</button>
@@ -124,32 +130,6 @@ include __DIR__ . '/../includes/admin-head.php';
     </div>
   </main>
 </div>
-<script>
-function autoSlug(v) {
-  if (document.getElementById('fId').value !== '0') return;
-  document.getElementById('fSlug').value = v.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/đ/g,'d').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-}
-function editC(c) {
-  document.getElementById('fTitle').textContent = '✏️ Sửa danh mục';
-  document.getElementById('fId').value    = c.id;
-  document.getElementById('fTen').value   = c.ten_danh_muc;
-  document.getElementById('fSlug').value  = c.slug;
-  document.getElementById('fMota').value  = c.mo_ta || '';
-  document.getElementById('fOrder').value = c.thu_tu;
-  document.getElementById('catFormWrap').scrollIntoView({behavior:'smooth'});
-}
-function resetF() {
-  document.getElementById('fTitle').textContent = '➕ Thêm danh mục mới';
-  document.getElementById('catForm').reset();
-  document.getElementById('fId').value = '0';
-}
-function openForm() {
-  resetF();
-  document.getElementById('catFormWrap').scrollIntoView({behavior:'smooth'});
-  document.getElementById('fTen').focus();
-}
-</script>
+<script src="<?= SITE_URL ?>/assets/js/admin-categories.js"></script>
 </body>
 </html>

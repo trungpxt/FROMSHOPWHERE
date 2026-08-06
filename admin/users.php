@@ -16,7 +16,7 @@ $users = $stmt->fetchAll();
 $counts = db()->query("SELECT vai_tro,COUNT(*) c FROM users GROUP BY vai_tro")->fetchAll(PDO::FETCH_KEY_PAIR);
 $total  = array_sum($counts);
 $admins = $counts['admin'] ?? 0;
-$guests = $counts['khach'] ?? 0;
+$guests = $counts['khach_hang'] ?? 0;
 $ucolors = ['#065E34','#185FA5','#534AB7','#A32D2D','#BA7517'];
 $admPageTitle = 'Người dùng — Admin FSW';
 $admBreadcrumb = 'Admin';
@@ -60,7 +60,7 @@ include __DIR__ . '/../includes/admin-head.php';
         </div>
         <div class="filter-tabs">
           <a href="?s=<?= urlencode($s) ?>&filter=all" class="filter-tab <?= $filter==='all'?'active':'' ?>">Tất cả (<?= $total ?>)</a>
-          <a href="?s=<?= urlencode($s) ?>&filter=khach" class="filter-tab <?= $filter==='khach'?'active':'' ?>">Khách hàng</a>
+          <a href="?s=<?= urlencode($s) ?>&filter=khach_hang" class="filter-tab <?= $filter==='khach_hang'?'active':'' ?>">Khách hàng</a>
           <a href="?s=<?= urlencode($s) ?>&filter=admin" class="filter-tab <?= $filter==='admin'?'active':'' ?>">Admin</a>
         </div>
       </div>

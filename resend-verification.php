@@ -8,6 +8,7 @@ $msg     = '';
 $msgType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
     $email = strtolower(trim($_POST['email'] ?? ''));
     if (!$email || !isValidEmailPhp($email)) {
         $msg     = 'Vui lòng nhập email hợp lệ.';
@@ -57,17 +58,22 @@ $currentPage = '';
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Gửi lại xác nhận email — FROMSHOPWHERE</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
 </head>
 <body>
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 <?php include __DIR__ . '/includes/nav.php'; ?>
 
 <div class="auth-wrap">
   <div class="auth-card">
     <div class="auth-logo" style="text-align:center;margin-bottom:16px">
-      <img src="images/logo.png" alt="FROMSHOPWHERE" style="height:64px;width:auto">
+      <img src="images/ui/logo.png" alt="FROMSHOPWHERE" class="logo-img-light" style="height:64px;width:auto">
+      <img src="images/ui/logo-dark.png" alt="FROMSHOPWHERE" class="logo-img-dark" style="height:64px;width:auto">
     </div>
     <h2 style="text-align:center;margin:0 0 6px;font-size:20px">Gửi lại email xác nhận</h2>
     <p style="text-align:center;color:var(--text-muted,#888);font-size:13px;margin:0 0 24px">
@@ -75,17 +81,16 @@ $currentPage = '';
     </p>
 
     <?php if ($msg): ?>
-      <?php $bg = $msgType === 'success' ? '#D1FAE5' : '#FEE2E2';
-            $cl = $msgType === 'success' ? '#065F46' : '#991B1B';
+      <?php $alertCls = $msgType === 'success' ? 'auth-alert-ok' : 'auth-alert-err';
             $ic = $msgType === 'success' ? '✅' : '⚠'; ?>
-      <div style="background:<?= $bg ?>;color:<?= $cl ?>;padding:12px 16px;border-radius:8px;
-                  font-size:13px;margin-bottom:20px;line-height:1.5">
+      <div class="auth-alert <?= $alertCls ?>">
         <?= $ic ?> <?= e($msg) ?>
       </div>
     <?php endif; ?>
 
     <?php if ($msgType !== 'success'): ?>
     <form method="POST" autocomplete="on">
+      <?= csrfField() ?>
       <div class="form-group">
         <label class="form-label">Email</label>
         <input class="form-input" type="email" name="email" required
@@ -97,12 +102,12 @@ $currentPage = '';
     <?php endif; ?>
 
     <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--text-muted,#888)">
-      <a href="login.php" style="color:var(--green-600,#0A8A4C);font-weight:600">← Quay lại đăng nhập</a>
+      <a href="login.php" style="color:var(--teal-700);font-weight:600">← Quay lại đăng nhập</a>
     </p>
   </div>
 </div>
 
-<script src="shared.js"></script>
-<script>document.addEventListener('DOMContentLoaded',()=>{restoreTheme();updateCartBadge();syncCartPanel();})</script>
+<script src="assets/js/shared.js"></script>
+<script src="assets/js/page-init.js"></script>
 </body>
 </html>

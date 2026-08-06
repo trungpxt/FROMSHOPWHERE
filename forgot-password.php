@@ -17,12 +17,16 @@ startSession();
 if (isLoggedIn()) redirect(SITE_URL . '/index.php');
 
 /* ── Cấu hình Gmail SMTP ─────────────────────────────────────────────── */
-define('MAIL_FROM',     'iddd83715@gmail.com');
-define('MAIL_FROM_NAME','FROMSHOPWHERE');
-define('MAIL_PASSWORD', 'cnyibljkifbpwcds');   // App Password (16 ký tự không dấu cách)
-define('MAIL_HOST',     'smtp.gmail.com');
-define('MAIL_PORT',      587);
-define('TOKEN_EXPIRE_MINUTES', 30);
+if (!defined('MAIL_FROM')) {
+    define('MAIL_FROM',     '');
+    define('MAIL_FROM_NAME','FROMSHOPWHERE');
+    define('MAIL_PASSWORD', '');
+    define('MAIL_HOST',     'smtp.gmail.com');
+    define('MAIL_PORT',      587);
+}
+if (!defined('TOKEN_EXPIRE_MINUTES')) {
+    define('TOKEN_EXPIRE_MINUTES', 30);
+}
 
 /* ── Gửi email qua PHPMailer ─────────────────────────────────────────── */
 function sendResetEmail(string $toEmail, string $toName, string $token): bool
@@ -41,6 +45,8 @@ function sendResetEmail(string $toEmail, string $toName, string $token): bool
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = MAIL_PORT;
         $mail->CharSet    = 'UTF-8';
+        $mail->Timeout    = 8;   // giây — tránh treo request nếu SMTP chậm/lỗi
+        $mail->SMTPKeepAlive = false;
 
         // Người gửi / nhận
         $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
@@ -68,10 +74,14 @@ function sendResetEmail(string $toEmail, string $toName, string $token): bool
 function buildEmailHtml(string $name, string $link): string
 {
     $expire = TOKEN_EXPIRE_MINUTES;
+    $year = date('Y');
     return <<<HTML
 <!DOCTYPE html>
 <html lang="vi">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head><meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png"><meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0">
     <tr><td align="center">
@@ -79,7 +89,7 @@ function buildEmailHtml(string $name, string $link): string
              style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
         <!-- Header -->
         <tr>
-          <td style="background:#0A8A4C;padding:28px 40px;text-align:center">
+          <td style="background:#3B2FA0;padding:28px 40px;text-align:center">
             <h1 style="margin:0;color:#fff;font-size:22px;letter-spacing:1px">FROMSHOPWHERE</h1>
           </td>
         </tr>
@@ -95,7 +105,7 @@ function buildEmailHtml(string $name, string $link): string
             </p>
             <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px">
               <tr>
-                <td style="background:#0A8A4C;border-radius:8px">
+                <td style="background:#3B2FA0;border-radius:8px">
                   <a href="{$link}"
                      style="display:inline-block;padding:14px 36px;color:#fff;font-size:15px;
                             font-weight:700;text-decoration:none;letter-spacing:.5px">
@@ -108,7 +118,7 @@ function buildEmailHtml(string $name, string $link): string
               Hoặc sao chép đường dẫn này vào trình duyệt:
             </p>
             <p style="margin:0 0 24px;font-size:11px;word-break:break-all">
-              <a href="{$link}" style="color:#0A8A4C">{$link}</a>
+              <a href="{$link}" style="color:#3B2FA0">{$link}</a>
             </p>
             <p style="margin:0;color:#aaa;font-size:12px;line-height:1.5">
               Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.
@@ -120,7 +130,7 @@ function buildEmailHtml(string $name, string $link): string
         <tr>
           <td style="background:#f9fafb;padding:16px 40px;text-align:center;border-top:1px solid #e5e7eb">
             <p style="margin:0;color:#aaa;font-size:11px">
-              © 2025 FROMSHOPWHERE · Email này được gửi tự động, vui lòng không trả lời.
+              © {$year} FROMSHOPWHERE · Email này được gửi tự động, vui lòng không trả lời.
             </p>
           </td>
         </tr>
@@ -137,6 +147,7 @@ $msg     = '';
 $msgType = '';   // 'success' | 'error'
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
     $email = strtolower(trim($_POST['email'] ?? ''));
 
     if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -183,7 +194,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $msgType = 'success';
             }
         } catch (MailException $e) {
-          die('PHPMailer Error: ' . $mail->ErrorInfo);
+          error_log('forgot-password.php mail error: ' . $mail->ErrorInfo);
+          // Không die() lộ chi tiết SMTP — vẫn hiển thị thông báo chung như trên
+          // để không lộ email nào tồn tại trong hệ thống.
+          $msg     = 'Nếu email này tồn tại trong hệ thống, chúng tôi đã gửi link đặt lại mật khẩu. Kiểm tra hộp thư (kể cả Spam).';
+          $msgType = 'success';
       }
     }
 }
@@ -194,18 +209,23 @@ $currentPage = '';
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Quên mật khẩu — FROMSHOPWHERE</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
 </head>
 <body>
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 <?php include __DIR__ . '/includes/nav.php'; ?>
 
 <div class="auth-wrap">
   <div class="auth-card">
 
     <div class="auth-logo" style="text-align:center;margin-bottom:16px">
-      <img src="images/logo.png" alt="FROMSHOPWHERE" style="height:64px;width:auto">
+      <img src="images/ui/logo.png" alt="FROMSHOPWHERE" class="logo-img-light" style="height:64px;width:auto">
+      <img src="images/ui/logo-dark.png" alt="FROMSHOPWHERE" class="logo-img-dark" style="height:64px;width:auto">
     </div>
 
     <h2 style="text-align:center;margin:0 0 6px;font-size:20px">Quên mật khẩu?</h2>
@@ -214,17 +234,16 @@ $currentPage = '';
     </p>
 
     <?php if ($msg): ?>
-      <?php $bg = $msgType === 'success' ? '#D1FAE5' : '#FEE2E2';
-            $cl = $msgType === 'success' ? '#065F46' : '#991B1B';
+      <?php $alertCls = $msgType === 'success' ? 'auth-alert-ok' : 'auth-alert-err';
             $ic = $msgType === 'success' ? '✅' : '⚠'; ?>
-      <div style="background:<?= $bg ?>;color:<?= $cl ?>;padding:12px 16px;border-radius:8px;
-                  font-size:13px;margin-bottom:20px;line-height:1.5">
+      <div class="auth-alert <?= $alertCls ?>">
         <?= $ic ?> <?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?>
       </div>
     <?php endif; ?>
 
     <?php if ($msgType !== 'success'): ?>
     <form method="POST" autocomplete="on" novalidate>
+      <?= csrfField() ?>
       <div class="form-group">
         <label class="form-label">Địa chỉ Email</label>
         <input class="form-input" type="email" name="email" required
@@ -237,7 +256,7 @@ $currentPage = '';
 
     <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--text-muted,#888)">
       Nhớ ra mật khẩu rồi?
-      <a href="login.php" style="color:var(--green-600,#0A8A4C);font-weight:600">Đăng nhập</a>
+      <a href="login.php" style="color:var(--teal-700);font-weight:600">Đăng nhập</a>
     </p>
 
   </div>
@@ -246,7 +265,7 @@ $currentPage = '';
 <footer>
   <div class="footer-inner">
     <div class="footer-bottom">
-      <p>© 2025 FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
+      <p>© <?= date('Y') ?> FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
       <div class="pay-icons">
         <div class="pay-badge">VISA</div><div class="pay-badge">MC</div>
         <div class="pay-badge">MOMO</div><div class="pay-badge">ZALO</div>
@@ -254,7 +273,7 @@ $currentPage = '';
     </div>
   </div>
 </footer>
-<script src="shared.js"></script>
-<script>document.addEventListener('DOMContentLoaded',()=>{restoreTheme();updateCartBadge();syncCartPanel();})</script>
+<script src="assets/js/shared.js"></script>
+<script src="assets/js/page-init.js"></script>
 </body>
 </html>

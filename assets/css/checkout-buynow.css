@@ -1,0 +1,15 @@
+/* .user-dropdown dùng chung định nghĩa trong style.css, không lặp lại ở đây */
+
+@keyframes qrFadeIn {
+  from{transform:scale(.9) translateY(20px);opacity:0}
+  to{transform:scale(1) translateY(0);opacity:1}
+}
+
+/* ── DARK THEME MỚI ── */
+body.dark .checkout-box { background: #15132E; border: 1px solid rgba(255,255,255,.07); }
+body.dark .checkout-box h3 { color: #fff; border-bottom-color: rgba(255,255,255,.07); }
+body.dark .order-line .lbl { color: #C4BFE8; }
+body.dark .order-line .val { color: #F1EFFC; }
+body.dark .order-line.total .val { color: #AC9FFF; }
+body.dark .pay-option { background: #1D1B40; border-color: rgba(255,255,255,.07); color: #C4BFE8; }
+body.dark .pay-option.selected { background: rgba(139, 124, 240,.08); border-color: #8B7CF0; color: #fff; }

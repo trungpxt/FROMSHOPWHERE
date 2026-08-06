@@ -60,6 +60,7 @@ if (!$token) {
 
 /* ── Xử lý POST ──────────────────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $valid) {
+    csrfCheck();
     $newPass  = $_POST['password']  ?? '';
     $newPass2 = $_POST['password2'] ?? '';
     $postToken = trim($_POST['token'] ?? '');
@@ -104,18 +105,23 @@ $currentPage = '';
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Đặt lại mật khẩu — FROMSHOPWHERE</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
 </head>
 <body>
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 <?php include __DIR__ . '/includes/nav.php'; ?>
 
 <div class="auth-wrap">
   <div class="auth-card">
 
     <div class="auth-logo" style="text-align:center;margin-bottom:16px">
-      <img src="images/logo.png" alt="FROMSHOPWHERE" style="height:64px;width:auto">
+      <img src="images/ui/logo.png" alt="FROMSHOPWHERE" class="logo-img-light" style="height:64px;width:auto">
+      <img src="images/ui/logo-dark.png" alt="FROMSHOPWHERE" class="logo-img-dark" style="height:64px;width:auto">
     </div>
 
     <h2 style="text-align:center;margin:0 0 6px;font-size:20px">Đặt lại mật khẩu</h2>
@@ -124,11 +130,9 @@ $currentPage = '';
     </p>
 
     <?php if ($msg): ?>
-      <?php $bg = $msgType === 'success' ? '#D1FAE5' : '#FEE2E2';
-            $cl = $msgType === 'success' ? '#065F46' : '#991B1B';
+      <?php $alertCls = $msgType === 'success' ? 'auth-alert-ok' : 'auth-alert-err';
             $ic = $msgType === 'success' ? '✅' : '⚠'; ?>
-      <div style="background:<?= $bg ?>;color:<?= $cl ?>;padding:12px 16px;border-radius:8px;
-                  font-size:13px;margin-bottom:20px;line-height:1.5">
+      <div class="auth-alert <?= $alertCls ?>">
         <?= $ic ?> <?= e($msg) ?>
       </div>
     <?php endif; ?>
@@ -136,6 +140,7 @@ $currentPage = '';
     <?php if ($valid): ?>
     <!-- Form đặt mật khẩu mới -->
     <form method="POST" autocomplete="off" novalidate>
+      <?= csrfField() ?>
       <input type="hidden" name="token" value="<?= e($token) ?>">
 
       <div class="form-group">
@@ -178,7 +183,7 @@ $currentPage = '';
     <?php endif; ?>
 
     <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--text-muted,#888)">
-      <a href="login.php" style="color:var(--green-600,#0A8A4C)">← Quay lại đăng nhập</a>
+      <a href="login.php" style="color:var(--teal-700)">← Quay lại đăng nhập</a>
     </p>
 
   </div>
@@ -187,7 +192,7 @@ $currentPage = '';
 <footer>
   <div class="footer-inner">
     <div class="footer-bottom">
-      <p>© 2025 FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
+      <p>© <?= date('Y') ?> FROMSHOPWHERE. Bảo lưu mọi quyền.</p>
       <div class="pay-icons">
         <div class="pay-badge">VISA</div><div class="pay-badge">MC</div>
         <div class="pay-badge">MOMO</div><div class="pay-badge">ZALO</div>
@@ -195,7 +200,7 @@ $currentPage = '';
     </div>
   </div>
 </footer>
-<script src="shared.js"></script>
-<script>document.addEventListener('DOMContentLoaded',()=>{restoreTheme();updateCartBadge();syncCartPanel();})</script>
+<script src="assets/js/shared.js"></script>
+<script src="assets/js/page-init.js"></script>
 </body>
 </html>

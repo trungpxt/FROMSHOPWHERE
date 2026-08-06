@@ -62,25 +62,28 @@ $currentPage = '';
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="images/ui/apple-touch-icon.png">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Xác nhận email — FROMSHOPWHERE</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/style.css?v=<?= CSS_VER ?>">
 </head>
 <body>
+<script>if(localStorage.getItem('fsw-theme')==='dark')document.body.classList.add('dark');</script>
 <?php include __DIR__ . '/includes/nav.php'; ?>
 
 <div class="auth-wrap">
   <div class="auth-card" style="text-align:center">
     <div class="auth-logo" style="margin-bottom:16px">
-      <img src="images/logo.png" alt="FROMSHOPWHERE" style="height:64px;width:auto">
+      <img src="images/ui/logo.png" alt="FROMSHOPWHERE" class="logo-img-light" style="height:64px;width:auto">
+      <img src="images/ui/logo-dark.png" alt="FROMSHOPWHERE" class="logo-img-dark" style="height:64px;width:auto">
     </div>
     <?php
-      $bg = $msgType === 'success' ? '#D1FAE5' : '#FEE2E2';
-      $cl = $msgType === 'success' ? '#065F46' : '#991B1B';
+      $alertCls = $msgType === 'success' ? 'auth-alert-ok' : 'auth-alert-err';
       $ic = $msgType === 'success' ? '✅' : '⚠';
     ?>
-    <div style="background:<?= $bg ?>;color:<?= $cl ?>;padding:14px 18px;border-radius:8px;
-                font-size:14px;margin-bottom:20px;line-height:1.5">
+    <div class="auth-alert <?= $alertCls ?>">
       <?= $ic ?> <?= e($msg) ?>
     </div>
     <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted,#888)">
@@ -88,7 +91,7 @@ $currentPage = '';
         Tài khoản của bạn đã được kích hoạt.
       <?php else: ?>
         Cần link mới?
-        <a href="resend-verification.php" style="color:var(--green-600,#0A8A4C);font-weight:600">Gửi lại email xác nhận</a>
+        <a href="resend-verification.php" style="color:var(--teal-700);font-weight:600">Gửi lại email xác nhận</a>
       <?php endif; ?>
     </p>
     <a href="login.php" class="btn-submit" style="display:inline-block;text-decoration:none;margin-top:8px">
@@ -97,7 +100,7 @@ $currentPage = '';
   </div>
 </div>
 
-<script src="shared.js"></script>
-<script>document.addEventListener('DOMContentLoaded',()=>{restoreTheme();updateCartBadge();syncCartPanel();})</script>
+<script src="assets/js/shared.js"></script>
+<script src="assets/js/page-init.js"></script>
 </body>
 </html>

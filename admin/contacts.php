@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../mail-config.php';
+require_once __DIR__ . '/../includes/notify.php';
 requireAdmin();
 
 /* Tạo bảng nếu chưa có */
@@ -20,6 +22,7 @@ $msg = '';
 
 /* Cập nhật trạng thái */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
     $a = $_POST['action'] ?? '';
     if ($a === 'status') {
         db()->prepare("UPDATE contact_messages SET trang_thai=:s WHERE id=:id")
@@ -37,28 +40,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $row   = db()->query("SELECT * FROM contact_messages WHERE id=$id")->fetch();
         if ($row && $reply) {
             try {
-                require_once __DIR__ . '/../vendor/autoload.php';
-                $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-                $mail->isSMTP();
-                $mail->Host       = MAIL_HOST;
-                $mail->SMTPAuth   = true;
-                $mail->Username   = MAIL_FROM;
-                $mail->Password   = MAIL_PASSWORD;
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = MAIL_PORT;
-                $mail->CharSet    = 'UTF-8';
-                $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
+                $mail = createMailer();
                 $mail->addAddress($row['email'], $row['ho_ten']);
                 $mail->Subject = "Re: " . $row['chu_de'] . " — FROMSHOPWHERE";
                 $mail->isHTML(true);
                 $mail->Body = "
                 <div style='font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px'>
-                  <div style='background:#04342C;padding:16px 24px;border-radius:12px 12px 0 0'>
-                    <h2 style='color:#E1FCF6;margin:0;font-size:18px'>FROMSHOPWHERE Support</h2>
+                  <div style='background:#16123F;padding:16px 24px;border-radius:12px 12px 0 0'>
+                    <h2 style='color:#fff;margin:0;font-size:18px'>FROMSHOPWHERE Support</h2>
                   </div>
                   <div style='background:#fff;border:1px solid #e0e0e0;border-top:none;padding:28px 24px;border-radius:0 0 12px 12px'>
                     <p>Xin chào <strong>" . e($row['ho_ten']) . "</strong>,</p>
-                    <div style='background:#f5f5f5;border-left:3px solid #0F6E56;padding:14px 16px;border-radius:4px;font-size:14px;line-height:1.7;color:#333;margin-bottom:16px'>
+                    <div style='background:#f5f5f5;border-left:3px solid #3B2FA0;padding:14px 16px;border-radius:4px;font-size:14px;line-height:1.7;color:#333;margin-bottom:16px'>
                       " . nl2br(e($reply)) . "
                     </div>
                     <p style='color:#777;font-size:13px'>Câu hỏi gốc của bạn: <em>" . e(mb_substr($row['noi_dung'],0,150)) . "...</em></p>
@@ -69,6 +62,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mail->send();
                 db()->prepare("UPDATE contact_messages SET trang_thai='da_tra_loi' WHERE id=:id")
                    ->execute([':id'=>$id]);
+
+                // Thông báo trong chuông cho khách (nếu tin nhắn gắn với tài khoản đã đăng nhập)
+                if (!empty($row['nguoi_dung_id'])) {
+                    createNotification(
+                        (int)$row['nguoi_dung_id'],
+                        'lien_he',
+                        'Yêu cầu liên hệ của bạn đã được trả lời',
+                        mb_substr($reply, 0, 150),
+                        SITE_URL . '/contact.php'
+                    );
+                }
+
                 $msg = "✅ Đã gửi email trả lời cho " . e($row['email']);
             } catch(Exception $ex) {
                 $msg = "❌ Lỗi gửi email: " . $ex->getMessage();
@@ -109,15 +114,18 @@ include __DIR__ . '/../includes/admin-head.php';
   <?php include __DIR__ . '/sidebar.php'; ?>
   <main class="adm-main">
     <div class="adm-topbar">
+      <button onclick="document.querySelector('.adm-side').classList.toggle('open');document.querySelector('.adm-side-backdrop').classList.toggle('open')" class="adm-hamburger" aria-label="Mở menu" title="Menu">☰</button>
       <div class="adm-breadcrumb">Admin <span class="sep">/</span> <strong>Tin nhắn liên hệ</strong>
         <?php if($unread > 0): ?>
           <span class="badge b-red" style="margin-left:8px"><span class="badge-dot"></span><?= $unread ?> chưa đọc</span>
         <?php endif; ?>
       </div>
       <div class="adm-topbar-right">
-        <a href="<?= admThemeToggleUrl() ?>" class="adm-theme-btn" title="Đổi giao diện"><?= admThemeIcon() ?></a>
+        <button onclick="toggleTheme()" class="adm-theme-btn" title="Đổi giao diện" id="admThemeBtn">☀️</button>
+        <a href="<?= SITE_URL ?>/index.php" class="btn btn-secondary">🌐 Xem website</a>
       </div>
     </div>
+    <div class="adm-side-backdrop" onclick="document.querySelector('.adm-side').classList.remove('open');this.classList.remove('open')"></div>
 
     <div class="adm-content">
       <?php if($msg): ?>
@@ -136,7 +144,7 @@ include __DIR__ . '/../includes/admin-head.php';
       <div class="table-card" style="margin-bottom:20px;padding:24px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
           <h3 style="font-size:16px;font-weight:800;margin:0">📩 Tin nhắn #<?= $viewMsg['id'] ?></h3>
-          <a href="?" style="font-size:13px;color:var(--ink-3)">← Quay lại danh sách</a>
+          <a href="?" class="btn" style="font-size:13px;padding:8px 16px;border:1.5px solid var(--green);color:var(--green);background:transparent;transition:all .18s" onmouseover="this.style.background='var(--green)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--green)'">← Quay lại danh sách</a>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;font-size:13px">
           <div><span style="color:var(--ink-4);font-weight:600">Người gửi:</span> <strong><?= e($viewMsg['ho_ten']) ?></strong></div>
@@ -148,18 +156,38 @@ include __DIR__ . '/../includes/admin-head.php';
 
         <!-- Reply form -->
         <h4 style="font-size:14px;font-weight:700;margin:0 0 12px">✉️ Trả lời qua email</h4>
-        <form method="POST">
+        <form method="POST" id="replyForm" onsubmit="return submitReplyForm(this)">
+          <?= csrfField() ?>
           <input type="hidden" name="action" value="reply">
           <input type="hidden" name="id" value="<?= $viewMsg['id'] ?>">
           <textarea name="reply_text" required
             style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;min-height:100px;resize:vertical;outline:none;color:var(--ink);background:var(--white)"
             placeholder="Nội dung email trả lời..."></textarea>
           <div style="display:flex;gap:10px;margin-top:12px">
-            <button type="submit" class="btn btn-primary">📨 Gửi email trả lời</button>
+            <button type="submit" class="btn btn-primary" id="replySubmitBtn">📨 Gửi email trả lời</button>
             <a href="?" class="btn btn-secondary">Huỷ</a>
           </div>
         </form>
       </div>
+
+      <!-- Màn hình chờ khi đang gửi email trả lời -->
+      <div id="replyOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+        <div style="width:46px;height:46px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:var(--adm-lime,#c8ff00);animation:replySpin .8s linear infinite"></div>
+        <div style="color:#fff;font-size:14px;font-weight:700">📨 Đang gửi email trả lời...</div>
+        <div style="color:rgba(255,255,255,.6);font-size:12.5px">Vui lòng đợi trong giây lát</div>
+      </div>
+      <style>@keyframes replySpin{to{transform:rotate(360deg)}}</style>
+      <script>
+        function submitReplyForm(form){
+          var btn = document.getElementById('replySubmitBtn');
+          var overlay = document.getElementById('replyOverlay');
+          if (btn.disabled) return false; // tránh bấm gửi 2 lần
+          btn.disabled = true;
+          btn.textContent = '⏳ Đang gửi...';
+          if (overlay) overlay.style.display = 'flex';
+          return true;
+        }
+      </script>
       <?php else: ?>
 
       <!-- TOOLBAR -->
@@ -213,6 +241,7 @@ include __DIR__ . '/../includes/admin-head.php';
               <div class="act-row">
                 <a href="?view=<?= $ct['id'] ?>" class="act-btn ab-view" title="Xem & trả lời">👁</a>
                 <form method="POST" style="display:contents" onsubmit="return confirm('Xoá tin nhắn này?')">
+          <?= csrfField() ?>
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="id" value="<?= $ct['id'] ?>">
                   <button class="act-btn ab-del" type="submit" title="Xoá">🗑</button>
