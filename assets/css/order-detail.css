@@ -1,0 +1,153 @@
+.od-wrap { max-width: 760px; margin: 0 auto; }
+
+.od-back {
+    display: inline-block;
+    margin-bottom: 18px;
+    color: var(--text-sub);
+    font-size: 13.5px;
+    text-decoration: none;
+}
+.od-back:hover { color: var(--accent-600); }
+
+/* ── Timeline trạng thái ── */
+.od-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding: 20px 12px;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+}
+.od-step {
+    flex: 1;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    position: relative;
+}
+.od-step span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-alt);
+    border: 1.5px solid var(--border);
+    margin: 0 auto 6px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+.od-step.on span {
+    background: var(--accent-600);
+    border-color: var(--accent-600);
+    color: #fff;
+}
+.od-step.on { color: var(--text); font-weight: 600; }
+
+.od-cancelled {
+    padding: 16px;
+    border-radius: var(--r);
+    background: var(--red-bg);
+    color: var(--red);
+    font-weight: 600;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+/* ── Card ── */
+.od-card {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.od-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.od-card-head h3, .od-summary h3 {
+    font-size: 15px;
+    font-family: var(--font-display);
+}
+
+.od-item {
+    display: flex;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+}
+.od-item:last-child { border-bottom: none; padding-bottom: 0; }
+.od-item img {
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg-alt);
+}
+.od-item-info { flex: 1; min-width: 0; }
+.od-item-name { font-weight: 600; margin-bottom: 4px; }
+.od-item-meta { font-size: 12.5px; color: var(--text-muted); margin-bottom: 8px; }
+.od-item-total { font-weight: 700; color: var(--accent-700); white-space: nowrap; }
+
+.od-key-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.od-key {
+    font-family: monospace;
+    font-size: 13px;
+    background: var(--bg-alt);
+    border: 1px dashed var(--border-md);
+    border-radius: 6px;
+    padding: 4px 10px;
+    letter-spacing: .03em;
+}
+.od-copy-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--accent-700);
+    cursor: pointer;
+}
+.od-copy-btn:hover { background: var(--tint-teal); }
+.od-key-pending { font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+
+/* ── Summary ── */
+.od-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 0;
+    font-size: 13.5px;
+    color: var(--text-sub);
+}
+.od-row strong { color: var(--text); font-weight: 600; }
+.od-row-total {
+    border-top: 1px solid var(--border);
+    margin-top: 6px;
+    padding-top: 12px;
+    font-size: 15px;
+}
+.od-row-total strong { color: var(--accent-700); font-size: 17px; }
+
+/* ── Warranty CTA ── */
+.od-help {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 18px 20px;
+    border-radius: var(--r);
+    background: var(--amber-bg);
+    border: 1px solid rgba(186,117,23,.25);
+}
+.od-help strong { color: var(--text); }
+.od-help p { font-size: 12.5px; color: var(--text-sub); margin-top: 2px; }

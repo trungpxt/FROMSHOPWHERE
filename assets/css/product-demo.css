@@ -1,0 +1,22 @@
+/* .user-dropdown dùng chung định nghĩa trong style.css, không lặp lại ở đây */
+
+/* ── DARK THEME MỚI ── */
+body.dark .pd-wrap { background: transparent; }
+body.dark .pd-img-wrap { background: #15132E; border: 1px solid rgba(255,255,255,.07); }
+body.dark .pd-title { color: #fff; }
+body.dark .pd-meta-item { color: #8B85BA; }
+body.dark .pd-price-sale { color: #AC9FFF; }
+body.dark .pd-price-orig { color: #8B85BA; }
+body.dark .pd-discount-pct { background: rgba(139, 124, 240,.15); color: #C7BDFF; }
+body.dark .pd-desc { color: #C4BFE8; }
+body.dark .pd-features h4 { color: #fff; }
+body.dark .pd-features li { color: #C4BFE8; }
+body.dark .pd-features li::before { color: #22c55e; }
+body.dark .pd-stock { color: #22c55e; }
+body.dark .pd-stock.low { color: #f0a500; }
+body.dark .pd-stock.out { color: #f87171; }
+body.dark .btn-buy-now { background: #8B7CF0; color: #fff; }
+body.dark .btn-buy-now:hover { background: #AC9FFF; }
+body.dark .btn-add-cart { background: #322D5E; border-color: rgba(255,255,255,.12); color: #F1EFFC; }
+body.dark .btn-add-cart:hover { background: #2E2A5C; }
+body.dark .trust-row { border-top-color: rgba(255,255,255,.07); color: #8B85BA; }

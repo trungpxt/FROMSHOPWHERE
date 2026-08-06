@@ -1,0 +1,221 @@
+.policy-shell {
+    max-width: 980px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    align-items: start;
+    gap: 32px;
+}
+.policy-wrap {
+    max-width: none;
+    margin: 0;
+    min-width: 0;
+}
+.policy-wrap h2 {
+    font-family: var(--font-display);
+    font-size: 19px;
+    margin: 34px 0 12px;
+    color: var(--text);
+    scroll-margin-top: 90px;
+}
+.policy-wrap h2:first-of-type { margin-top: 0; }
+.policy-wrap p {
+    font-size: 14.5px;
+    line-height: 1.75;
+    color: var(--text-sub);
+    margin-bottom: 8px;
+}
+.policy-wrap a { color: var(--accent-600); }
+
+.policy-list {
+    list-style: none;
+    margin: 10px 0;
+    padding: 0;
+}
+.policy-list li {
+    position: relative;
+    padding: 10px 0 10px 26px;
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text-sub);
+    border-bottom: 1px solid var(--border);
+}
+.policy-list li:last-child { border-bottom: none; }
+.policy-list li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    color: var(--accent-600);
+    font-weight: 700;
+}
+.policy-list li strong { color: var(--text); }
+
+/* ── Mục lục: sidebar dính theo cuộn trang, tự nổi bật mục đang xem ── */
+.policy-toc {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 14px;
+    background: var(--bg-alt);
+    border-radius: var(--r);
+    /* Rule "nav { position: sticky; top: 0; z-index: 200; }" trong
+       style.css nhắm theo tên thẻ <nav> nên vô tình áp cả vào thẻ
+       <nav class="policy-toc"> này (top:0 khiến nó đè lên nội dung
+       và bị che bởi thanh nav chính). Ghi đè lại để nó dính đúng
+       ngay DƯỚI thanh nav chính (nav chính cao 64px) thay vì đè lên: */
+    position: sticky;
+    top: 84px;
+    align-self: start;
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    z-index: 150; /* thấp hơn nav chính (200) để không đè lên nav */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
+}
+.policy-toc a {
+    font-size: 12.5px;
+    line-height: 1.4;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-left: 2.5px solid transparent;
+    color: var(--text-sub);
+    text-decoration: none;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.policy-toc a:hover { background: var(--bg-card); color: var(--accent-700); }
+.policy-toc a.active {
+    background: var(--bg-card);
+    border-left-color: var(--accent-600);
+    color: var(--accent-700);
+    font-weight: 700;
+}
+
+/* Màn hình hẹp: mục lục trở lại thành dải pill nằm ngang, cuộn được,
+   dính ngay dưới nav chính (không đủ chỗ làm sidebar dọc). */
+@media (max-width: 860px) {
+    .policy-shell {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .policy-toc {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: visible;
+        max-height: none;
+        gap: 8px;
+        top: 64px;
+        scrollbar-width: none;
+    }
+    .policy-toc::-webkit-scrollbar { display: none; }
+    .policy-toc a {
+        white-space: nowrap;
+        border-left: none;
+        border: 1px solid var(--border);
+    }
+    .policy-toc a.active {
+        border-color: var(--accent-600);
+    }
+}
+
+/* ── Số liệu nổi bật (about.php) ── */
+.policy-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 30px;
+}
+.policy-stat {
+    text-align: center;
+    padding: 18px 8px;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+}
+.policy-stat strong {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 22px;
+    color: var(--accent-700);
+}
+.policy-stat span {
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+/* ── Lời nhắn sáng lập — cố tình khác phong cách "thẻ" xung quanh để đọc
+      như lời viết tay thật, không phải nội dung marketing dàn trải ── */
+.founder-note {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    background: var(--bg-alt, var(--bg));
+    border-left: 3px solid var(--teal-700);
+    border-radius: 0 var(--r) var(--r) 0;
+    padding: 22px 24px;
+    margin-bottom: 36px;
+}
+.founder-avatar {
+    font-size: 26px;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--teal-50);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.founder-note-body p {
+    font-style: italic;
+    font-size: 14.5px;
+    line-height: 1.75;
+    color: var(--text-sub);
+    margin: 0 0 10px;
+}
+.founder-note-body p:last-of-type { margin-bottom: 10px; }
+.founder-sign {
+    font-style: normal;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--teal-700);
+    letter-spacing: .02em;
+}
+
+/* ── Thẻ cam kết (about.php) ── */
+.policy-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 10px 0;
+}
+.policy-card {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+    padding: 18px;
+}
+.policy-card-icon { font-size: 26px; margin-bottom: 8px; }
+.policy-card h3 { font-size: 14.5px; margin-bottom: 6px; color: var(--text); }
+.policy-card p { font-size: 12.5px; margin-bottom: 0; }
+
+/* ── CTA cuối trang ── */
+.policy-cta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 20px 22px;
+    margin-top: 30px;
+    border-radius: var(--r);
+    background: var(--tint-teal);
+    border: 1px solid rgba(var(--accent-rgb), .18);
+}
+.policy-cta strong { color: var(--text); }
+.policy-cta p { font-size: 12.5px; color: var(--text-sub); margin-top: 2px; margin-bottom: 0; }
+
+@media (max-width: 640px) {
+    .policy-stats { grid-template-columns: repeat(2, 1fr); }
+    .policy-cards { grid-template-columns: 1fr; }
+}
