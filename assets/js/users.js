@@ -1,1 +1,0 @@
-restoreTheme();

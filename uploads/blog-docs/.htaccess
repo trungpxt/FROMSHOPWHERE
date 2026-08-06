@@ -1,5 +1,0 @@
-# Chỉ cho phép file .docx trong thư mục này được truy cập trực tiếp,
-# chặn thực thi PHP nếu lỡ có file lạ lọt vào (phòng hờ, dù server chỉ cho upload .docx)
-<FilesMatch "\.(php|php\d|phtml|pl|py|cgi|sh)$">
-    Require all denied
-</FilesMatch>
